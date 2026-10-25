@@ -13,6 +13,10 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: true
 
+# GITHUB_TOKEN は読み取りだけで足りる（Docker Hub・Azure へは Secrets で認証する）
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
