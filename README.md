@@ -1,0 +1,148 @@
+# meeting-station
+
+別々の駅から同じ目的駅へ向かう二人が、途中で落ち合える駅を探す Web アプリ。
+[fare-map](https://github.com/KitagawaFuuga/fare-map) の駅データと運賃計算を土台にしている。
+設計は `docs/superpowers/specs/2026-10-25-meeting-station-design.md`。
+
+## 開発
+
+```
+npm i && npm run dev
+```
+
+http://localhost:3000 で起動する。
+
+データ（`data/graph.json`）はコミット済みなのでそのまま動く。
+更新・再生成する場合は `scripts/pipeline/README.md` の手順に従う。
+
+### テスト
+
+```
+npm run test    # ロジック（374件・約3秒）
+npm run e2e     # ブラウザ実機のスモーク3本
+```
+
+`npm run e2e` は本番ビルドを作ってから Chromium で触る。`next dev` ではなく
+本番ビルドなのは、maplibre のワーカー解決が dev と本番で挙動が違い、
+検出したいのが本番側の 404 だから。初回は
+`npx playwright install chromium` が必要。
+
+繰り返し回すときはサーバーを立てたままにすると速い（18秒 → 5秒）。
+`reuseExistingServer` が効いてビルドを飛ばす。
+
+```
+npx next start -p 3100     # 別ターミナルで起動しっぱなしにする
+npm run e2e
+```
+
+ただしこの方法ではコードを変えても再ビルドされない。UI を触ったら
+サーバーを立て直すこと。
+
+デバッグ用:
+
+```
+npm run e2e:ui                    # タイムライン付きの GUI
+npx playwright test --headed      # ブラウザを表示して実行
+npx playwright test --debug       # ステップ実行
+npx playwright show-report        # 失敗後にレポートを開く
+```
+
+### TypeScript 6 / 7 の併用
+
+`package.json` の依存が2本のエイリアスに分かれているのは、型検査を TS 7（Go 実装）で
+行いつつ、TS 7 未対応の typescript-eslint には TS 6 の API を渡すため。
+
+| 依存                 | 実体                      | 使う側                                           |
+| -------------------- | ------------------------- | ------------------------------------------------ |
+| `@typescript/native` | `typescript@7`            | `tsc`（`npm run typecheck`）、Next.js のビルド   |
+| `typescript`         | `@typescript/typescript6` | `import "typescript"` する側 = typescript-eslint |
+
+typescript-eslint は TS 7 を検出すると警告ではなく throw するため、素直に TS 7 を入れると
+`npm run lint` が動かない（typescript-eslint#10940 で対応を追跡中）。
+`tsc6` で TS 6 側の型検査も実行できる。将来 typescript-eslint が TS 7 に対応したら、
+この2本を `"typescript": "^7"` の1本に戻す。
+
+## Docker
+
+```
+docker compose up --build
+```
+
+http://localhost:3000 で起動する。動作確認済みのコマンド:
+
+```
+curl "http://localhost:3000/api/stations?q=新宿"
+curl "http://localhost:3000/api/reachable?from=<上で得た駅 id>&budget=500"
+```
+
+## デプロイ（初回の手動セットアップ）
+
+1. GitHub リポジトリの Secrets に `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` / `AZURE_CREDENTIALS` を設定
+2. Azure: `az group create -n fare-map-rg -l japaneast`
+3. `az containerapp env create` / `az containerapp create --name fare-map --min-replicas 0 --memory 1Gi --target-port 3000 --ingress external`
+4. 以後は `main` への push で `.github/workflows/deploy.yml` が自動デプロイする
+5. （任意）駅すぱあと API フリープランのキーを取得済みなら、Container App の環境変数に `EKISPERT_API_KEY` を設定する。
+   未設定の場合は経路検索リンクが Google Maps へのフォールバックになる。
+6. （任意）レート制限とキャッシュの既定値は `.env.example` 参照。既定のままで動く。
+
+`--min-replicas 0` は課金を抑えるが、レプリカが増えるとレート制限と結果キャッシュは
+レプリカごとに独立する（どちらもプロセス内のメモリに載る）。`--max-replicas` を絞るか、
+共有ストアに移すかを、スケールさせる前に決めること。
+
+### デプロイ前のローカル確認
+
+CI（`deploy.yml`）と同じく、本番と同じ standalone サーバーを起動して確かめられる。
+
+```
+docker build -t fare-map:verify .
+docker run -d --name fare-map-verify -p 3125:3000 fare-map:verify
+curl -s -D - -o /dev/null http://127.0.0.1:3125/ | grep -i content-security-policy
+curl -s "http://127.0.0.1:3125/api/stations?q=%E6%96%B0%E5%AE%BF"
+docker rm -f fare-map-verify
+```
+
+`npm run e2e` は `next start` を使うが、`output: standalone` とは組み合わせられない
+（Next.js が警告を出す）。standalone 側の COPY 漏れや起動時クラッシュはこの Docker 経路か
+`deploy.yml` のスモークでしか出ない。
+
+CI（`.github/workflows/ci.yml`）は push / PR ごとに lint / format:check / typecheck / test と、
+デスクトップ・モバイル両方の E2E を実行する。
+
+## 出典・ライセンス
+
+このアプリのソースコードは MIT License（`LICENSE`）。`data/` 配下のデータは
+対象外で、それぞれ以下の条件に従う。
+
+- 地図: (C) [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors /
+  タイル配信 [OpenFreeMap](https://openfreemap.org/)
+- 駅・路線データ（`data/graph.json` の駅・路線・接続）:
+  [駅データ.jp](https://ekidata.jp/)（[利用規約](https://ekidata.jp/agreement.php)）。
+  第5条により加工可、第6条により加工済みデータの第三者提供可。本家の会員ダウンロード
+  （無料・要ログイン）で取得した CSV を `data/raw/` に置き、`npm run pipeline:fetch` で
+  正式な名前にそろえる（現在は2026年版。以前使っていたミラー ny-a/ekidata は2021年で更新停止）。
+  しなの鉄道の篠ノ井〜長野の4駅は2026年版に無いため、2021年版の行を `data/extra-stations.json` で補っている。
+  2026年版が反映していない改称（川村→相良十島、東多良木→多良木青蓮寺、工機前→日工前）と
+  廃止（西黒崎）は、各社の公表資料をもとに `data/station-corrections.json` で直している。
+- 実営業キロ（`data/calibration.json`、および `graph.json` の `km` への距離補正）:
+  [全国鉄道運行本数データ](https://gtfs-gis.jp/railway_honsu/) / CC BY 4.0、ODbL 1.0。
+  配布元は「CC-BY 4.0、ODbL」と両方を掲げていて、どちらか一方を選べるとは書いていないため、
+  両方の条件に従う。CC BY 4.0 の出典表示は画面の出典欄で行っている。ODbL の継承条件に従い、
+  これを加工して作った `data/calibration.json` と `data/graph.json` の `km` は、
+  ODbL 1.0（https://opendatacommons.org/licenses/odbl/1-0/ ）のもとでも提供する。
+- 運賃表・特定運賃（`data/fare-rules`、`data/fare-overrides`）: 各鉄道事業者が公表する
+  運賃表から作成。抽出手順は `scripts/fare/extract/README.md` を参照。
+- 東京都交通局の全駅ペア運賃（`data/fare-sources/toei-*.json` および対応する
+  `data/fare-overrides/toei-*.json`）:
+  [公共交通オープンデータセンター](https://www.odpt.org/)（東京都交通局提供） / CC BY 4.0。
+  再取得は `npx tsx scripts/fare/ingest/odpt-toei.ts --write`。
+  なお ODPT の「基本ライセンス」データは再配布が禁止されているため、この
+  リポジトリが取り込んでよいのは CC BY 4.0 で公開されている事業者のみ。
+- 各社の公開 GTFS から起こした全駅ペア運賃（`data/fare-sources/kotoden.json`、
+  `yui-rail.json`、`sapporo.json` と対応する `data/fare-overrides/`）:
+  [高松琴平電気鉄道](https://www.kotoden.co.jp/)、
+  [沖縄都市モノレール](https://www.yui-rail.co.jp/)、
+  [札幌市交通局](https://www.city.sapporo.jp/st/) / いずれも CC BY 4.0。
+  対象の定義は `data/gtfs-sources.json`、再取得は
+  `npx tsx scripts/fare/ingest/gtfs-fares.ts --write`。
+
+運賃は概算です。正確な運賃は各社の経路検索で確認してください。

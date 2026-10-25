@@ -1,0 +1,2358 @@
+import { readFileSync, readdirSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { createFareCalculator } from "@/lib/fare/calculator";
+import type { RailGraph } from "@/lib/graph/types";
+import {
+  fareOverrideSchema,
+  fareRuleSchema,
+  type FareOverride,
+} from "@/lib/fare/types";
+import jrEast from "@/data/fare-rules/jr-east.json";
+import jrCentral from "@/data/fare-rules/jr-central.json";
+import jrWest from "@/data/fare-rules/jr-west.json";
+import jrHonshuKasan from "@/data/fare-rules/jr-honshu-kasan.json";
+import jrKyushuKasan from "@/data/fare-rules/jr-kyushu-kasan.json";
+import jrShikokuKasan from "@/data/fare-rules/jr-shikoku-kasan.json";
+import jrKyushu from "@/data/fare-rules/jr-kyushu.json";
+import jrHokkaido from "@/data/fare-rules/jr-hokkaido.json";
+import jrShikoku from "@/data/fare-rules/jr-shikoku.json";
+import kintetsu from "@/data/fare-rules/kintetsu.json";
+import meitetsu from "@/data/fare-rules/meitetsu.json";
+import tobu from "@/data/fare-rules/tobu.json";
+import generic from "@/data/fare-rules/generic-private.json";
+import tokyoMetro from "@/data/fare-rules/tokyo-metro.json";
+import toei from "@/data/fare-rules/toei.json";
+import osakaMetro from "@/data/fare-rules/osaka-metro.json";
+import nagoyaCity from "@/data/fare-rules/nagoya-city.json";
+import nankai from "@/data/fare-rules/nankai.json";
+import seibu from "@/data/fare-rules/seibu.json";
+import hankyu from "@/data/fare-rules/hankyu.json";
+import hiroshimaDentetsu from "@/data/fare-rules/hiroshima-dentetsu.json";
+import keio from "@/data/fare-rules/keio.json";
+import keikyu from "@/data/fare-rules/keikyu.json";
+import keisei from "@/data/fare-rules/keisei.json";
+import keiseiMatsudo from "@/data/fare-rules/keisei-matsudo.json";
+import kyotoSubway from "@/data/fare-rules/kyoto-subway.json";
+import kobeSubway from "@/data/fare-rules/kobe-subway.json";
+import tsukubaExpress from "@/data/fare-rules/tsukuba-express.json";
+import rinkai from "@/data/fare-rules/rinkai.json";
+import minatomirai from "@/data/fare-rules/minatomirai.json";
+import hokuso from "@/data/fare-rules/hokuso.json";
+import tokyoMonorail from "@/data/fare-rules/tokyo-monorail.json";
+import yurikamome from "@/data/fare-rules/yurikamome.json";
+import tamaMonorail from "@/data/fare-rules/tama-monorail.json";
+import osakaMonorail from "@/data/fare-rules/osaka-monorail.json";
+import hapiLine from "@/data/fare-rules/hapi-line.json";
+import irIshikawa from "@/data/fare-rules/ir-ishikawa.json";
+import ainokazeToyama from "@/data/fare-rules/ainokaze-toyama.json";
+import aoimori from "@/data/fare-rules/aoimori.json";
+import igr from "@/data/fare-rules/igr.json";
+import astram from "@/data/fare-rules/astram.json";
+import seasideLine from "@/data/fare-rules/seaside-line.json";
+import aonami from "@/data/fare-rules/aonami.json";
+import tosakuroNakamura from "@/data/fare-rules/tosakuro-nakamura.json";
+import tosakuroGomen from "@/data/fare-rules/tosakuro-gomen.json";
+import heichiku from "@/data/fare-rules/heichiku.json";
+import heichikuRetro from "@/data/fare-rules/heichiku-retro.json";
+import tango from "@/data/fare-rules/tango.json";
+import akitaNairiku from "@/data/fare-rules/akita-nairiku.json";
+import kantoRailway from "@/data/fare-rules/kanto-railway.json";
+import sangi from "@/data/fare-rules/sangi.json";
+import konan from "@/data/fare-rules/konan.json";
+import yoro from "@/data/fare-rules/yoro.json";
+import hakodateTram from "@/data/fare-rules/hakodate-tram.json";
+import izuhakone from "@/data/fare-rules/izuhakone.json";
+import joshin from "@/data/fare-rules/joshin.json";
+import jomo from "@/data/fare-rules/jomo.json";
+import shizutetsu from "@/data/fare-rules/shizutetsu.json";
+import entetsu from "@/data/fare-rules/entetsu.json";
+import noseden from "@/data/fare-rules/noseden.json";
+import kitakyu from "@/data/fare-rules/kitakyu.json";
+import shimabara from "@/data/fare-rules/shimabara.json";
+import fujikyu from "@/data/fare-rules/fujikyu.json";
+import kashimaRinkai from "@/data/fare-rules/kashima-rinkai.json";
+import uedaDentetsu from "@/data/fare-rules/ueda-dentetsu.json";
+import alpico from "@/data/fare-rules/alpico.json";
+import fukushimaKotsu from "@/data/fare-rules/fukushima-kotsu.json";
+import choshi from "@/data/fare-rules/choshi.json";
+import shonanMonorail from "@/data/fare-rules/shonan-monorail.json";
+import ryutetsu from "@/data/fare-rules/ryutetsu.json";
+import maihamaResortLine from "@/data/fare-rules/maihama-resort-line.json";
+import sagano from "@/data/fare-rules/sagano.json";
+import aizu from "@/data/fare-rules/aizu.json";
+import kumamotoDentetsu from "@/data/fare-rules/kumamoto-dentetsu.json";
+import izukyu from "@/data/fare-rules/izukyu.json";
+import enoden from "@/data/fare-rules/enoden.json";
+import kominato from "@/data/fare-rules/kominato.json";
+import isumi from "@/data/fare-rules/isumi.json";
+import wakayamaDentetsu from "@/data/fare-rules/wakayama-dentetsu.json";
+import iga from "@/data/fare-rules/iga.json";
+import ibara from "@/data/fare-rules/ibara.json";
+import chizu from "@/data/fare-rules/chizu.json";
+import donanIsaribi from "@/data/fare-rules/donan-isaribi.json";
+import nishikigawa from "@/data/fare-rules/nishikigawa.json";
+import hakoneTozan from "@/data/fare-rules/hakone-tozan.json";
+import mizuma from "@/data/fare-rules/mizuma.json";
+import yamaman from "@/data/fare-rules/yamaman.json";
+import mizushimaRinkai from "@/data/fare-rules/mizushima-rinkai.json";
+import utsunomiyaLrt from "@/data/fare-rules/utsunomiya-lrt.json";
+import noto from "@/data/fare-rules/noto.json";
+import okayamaKido from "@/data/fare-rules/okayama-kido.json";
+import kobeKosoku from "@/data/fare-rules/kobe-kosoku.json";
+import keihan from "@/data/fare-rules/keihan.json";
+import tokyu from "@/data/fare-rules/tokyu.json";
+import odakyu from "@/data/fare-rules/odakyu.json";
+import hanshin from "@/data/fare-rules/hanshin.json";
+import saitamaKosoku from "@/data/fare-rules/saitama-kosoku.json";
+import nishitetsu from "@/data/fare-rules/nishitetsu.json";
+import toyoKosoku from "@/data/fare-rules/toyo-kosoku.json";
+import sotetsu from "@/data/fare-rules/sotetsu.json";
+import hankai from "@/data/fare-rules/hankai.json";
+import keifuku from "@/data/fare-rules/keifuku.json";
+import nagasakiDentetsu from "@/data/fare-rules/nagasaki-dentetsu.json";
+import kumamotoCity from "@/data/fare-rules/kumamoto-city.json";
+import kagoshimaCity from "@/data/fare-rules/kagoshima-city.json";
+import shintetsu from "@/data/fare-rules/shintetsu.json";
+import sanyo from "@/data/fare-rules/sanyo.json";
+import sapporoSubway from "@/data/fare-rules/sapporo-subway.json";
+import sapporoStreetcar from "@/data/fare-rules/sapporo-streetcar.json";
+import iyotetsuSuburban from "@/data/fare-rules/iyotetsu-suburban.json";
+import iyotetsuCity from "@/data/fare-rules/iyotetsu-city.json";
+import toyotetsuAtsumi from "@/data/fare-rules/toyotetsu-atsumi.json";
+import toyotetsuCity from "@/data/fare-rules/toyotetsu-city.json";
+import aikan from "@/data/fare-rules/aikan.json";
+import sendaiSubway from "@/data/fare-rules/sendai-subway.json";
+import chichibu from "@/data/fare-rules/chichibu.json";
+import yokohamaSubway from "@/data/fare-rules/yokohama-subway.json";
+import nagaragawa from "@/data/fare-rules/nagaragawa.json";
+import tarumi from "@/data/fare-rules/tarumi.json";
+import fukuokaSubway from "@/data/fare-rules/fukuoka-subway.json";
+import nagaden from "@/data/fare-rules/nagaden.json";
+import manyosen from "@/data/fare-rules/manyosen.json";
+import hokutetsu from "@/data/fare-rules/hokutetsu.json";
+import chitetsuTram from "@/data/fare-rules/chitetsu-tram.json";
+import chitetsu from "@/data/fare-rules/chitetsu.json";
+import echizen from "@/data/fare-rules/echizen.json";
+import tokitetsu from "@/data/fare-rules/tokitetsu.json";
+import shinano from "@/data/fare-rules/shinano.json";
+import toeiToden from "@/data/fare-rules/toei-toden.json";
+import toeiToneri from "@/data/fare-rules/toei-toneri.json";
+import jrWestOverride from "@/data/fare-overrides/jr-west.json";
+import jrEastOverride from "@/data/fare-overrides/jr-east.json";
+import keikyuOverride from "@/data/fare-overrides/keikyu.json";
+import tokyuOverride from "@/data/fare-overrides/tokyu.json";
+import keihanOverride from "@/data/fare-overrides/keihan.json";
+import manyosenOverride from "@/data/fare-overrides/manyosen.json";
+import hokutetsuOverride from "@/data/fare-overrides/hokutetsu.json";
+import chitetsuOverride from "@/data/fare-overrides/chitetsu.json";
+import echizenOverride from "@/data/fare-overrides/echizen.json";
+import tokitetsuOverride from "@/data/fare-overrides/tokitetsu.json";
+import shinanoOverride from "@/data/fare-overrides/shinano.json";
+import toeiSubwayOverride from "@/data/fare-overrides/toei-subway.json";
+import toeiTodenOverride from "@/data/fare-overrides/toei-toden.json";
+import toeiToneriOverride from "@/data/fare-overrides/toei-toneri.json";
+import kotodenOverride from "@/data/fare-overrides/kotoden.json";
+import yuiRailOverride from "@/data/fare-overrides/yui-rail.json";
+import sapporoOverride from "@/data/fare-overrides/sapporo.json";
+import jrKyushuComputedOverride from "@/data/fare-overrides/jr-kyushu-computed.json";
+import jrWestSetoComputedOverride from "@/data/fare-overrides/jr-west-seto-computed.json";
+import kintetsuComputedOverride from "@/data/fare-overrides/kintetsu-computed.json";
+import meitetsuComputedOverride from "@/data/fare-overrides/meitetsu-computed.json";
+import nankaiComputedOverride from "@/data/fare-overrides/nankai-computed.json";
+import chibaMonorailOverride from "@/data/fare-overrides/chiba-monorail.json";
+import kobeNewTransitOverride from "@/data/fare-overrides/kobe-new-transit.json";
+import kitakyushuMonorailOverride from "@/data/fare-overrides/kitakyushu-monorail.json";
+import newShuttleOverride from "@/data/fare-overrides/new-shuttle.json";
+import linimoOverride from "@/data/fare-overrides/linimo.json";
+import sanrikuOverride from "@/data/fare-overrides/sanriku.json";
+import orangeOverride from "@/data/fare-overrides/orange.json";
+import tosakuroGomenAdjacentOverride from "@/data/fare-overrides/tosakuro-gomen-adjacent.json";
+import tenhamaOverride from "@/data/fare-overrides/tenhama.json";
+import matsuuraOverride from "@/data/fare-overrides/matsuura.json";
+import akitaNairikuSpecialOverride from "@/data/fare-overrides/akita-nairiku-special.json";
+import sendaiAirportOverride from "@/data/fare-overrides/sendai-airport.json";
+import akechiOverride from "@/data/fare-overrides/akechi.json";
+import wakasaOverride from "@/data/fare-overrides/wakasa.json";
+import abukumaOverride from "@/data/fare-overrides/abukuma.json";
+import ichibataOverride from "@/data/fare-overrides/ichibata.json";
+import fukutetsuOverride from "@/data/fare-overrides/fukutetsu.json";
+import oigawaOverride from "@/data/fare-overrides/oigawa.json";
+import yamagataTetsudoOverride from "@/data/fare-overrides/yamagata-tetsudo.json";
+import watetsuOverride from "@/data/fare-overrides/watetsu.json";
+import mokaOverride from "@/data/fare-overrides/moka.json";
+import kumagawaOverride from "@/data/fare-overrides/kumagawa.json";
+import tsugaruOverride from "@/data/fare-overrides/tsugaru.json";
+import yuriKogenOverride from "@/data/fare-overrides/yuri-kogen.json";
+import hokuetsuOverride from "@/data/fare-overrides/hokuetsu.json";
+import hitachinakaOverride from "@/data/fare-overrides/hitachinaka.json";
+import gakunanOverride from "@/data/fare-overrides/gakunan.json";
+import yaganOverride from "@/data/fare-overrides/yagan.json";
+import guidewayOverride from "@/data/fare-overrides/guideway.json";
+import hojoOverride from "@/data/fare-overrides/hojo.json";
+import johokuOverride from "@/data/fare-overrides/johoku.json";
+import shigarakiOverride from "@/data/fare-overrides/shigaraki.json";
+import kurobeOverride from "@/data/fare-overrides/kurobe.json";
+import asaKaiganOverride from "@/data/fare-overrides/asa-kaigan.json";
+import eizanOverride from "@/data/fare-overrides/eizan.json";
+import chikuhoOverride from "@/data/fare-overrides/chikuho.json";
+import kitakyuComputedOverride from "@/data/fare-overrides/kitakyu-computed.json";
+
+const rules = [
+  jrEast,
+  jrCentral,
+  jrWest,
+  jrHonshuKasan,
+  jrKyushuKasan,
+  jrShikokuKasan,
+  jrKyushu,
+  jrHokkaido,
+  jrShikoku,
+  kintetsu,
+  meitetsu,
+  tobu,
+  generic,
+  tokyoMetro,
+  toei,
+  toeiToden,
+  toeiToneri,
+  osakaMetro,
+  nagoyaCity,
+  nankai,
+  seibu,
+  hankyu,
+  hiroshimaDentetsu,
+  keio,
+  keikyu,
+  keisei,
+  keiseiMatsudo,
+  kyotoSubway,
+  kobeSubway,
+  tsukubaExpress,
+  rinkai,
+  minatomirai,
+  hokuso,
+  tokyoMonorail,
+  yurikamome,
+  tamaMonorail,
+  osakaMonorail,
+  hapiLine,
+  irIshikawa,
+  ainokazeToyama,
+  aoimori,
+  igr,
+  astram,
+  seasideLine,
+  aonami,
+  tosakuroNakamura,
+  tosakuroGomen,
+  heichiku,
+  heichikuRetro,
+  tango,
+  akitaNairiku,
+  kantoRailway,
+  sangi,
+  konan,
+  yoro,
+  hakodateTram,
+  izuhakone,
+  joshin,
+  jomo,
+  shizutetsu,
+  entetsu,
+  noseden,
+  kitakyu,
+  shimabara,
+  fujikyu,
+  kashimaRinkai,
+  uedaDentetsu,
+  alpico,
+  fukushimaKotsu,
+  choshi,
+  shonanMonorail,
+  ryutetsu,
+  maihamaResortLine,
+  sagano,
+  aizu,
+  kumamotoDentetsu,
+  izukyu,
+  enoden,
+  kominato,
+  isumi,
+  wakayamaDentetsu,
+  iga,
+  ibara,
+  chizu,
+  donanIsaribi,
+  nishikigawa,
+  hakoneTozan,
+  mizuma,
+  yamaman,
+  mizushimaRinkai,
+  utsunomiyaLrt,
+  noto,
+  okayamaKido,
+  kobeKosoku,
+  keihan,
+  tokyu,
+  odakyu,
+  hanshin,
+  saitamaKosoku,
+  nishitetsu,
+  toyoKosoku,
+  sotetsu,
+  hankai,
+  keifuku,
+  nagasakiDentetsu,
+  kumamotoCity,
+  kagoshimaCity,
+  shintetsu,
+  sanyo,
+  sapporoSubway,
+  sapporoStreetcar,
+  iyotetsuSuburban,
+  iyotetsuCity,
+  toyotetsuAtsumi,
+  toyotetsuCity,
+  aikan,
+  sendaiSubway,
+  chichibu,
+  yokohamaSubway,
+  nagaragawa,
+  tarumi,
+  fukuokaSubway,
+  nagaden,
+  manyosen,
+  hokutetsu,
+  chitetsuTram,
+  chitetsu,
+  echizen,
+  tokitetsu,
+  shinano,
+].map((r) => fareRuleSchema.parse(r));
+const overrides = [
+  jrWestOverride,
+  jrEastOverride,
+  keikyuOverride,
+  tokyuOverride,
+  keihanOverride,
+  manyosenOverride,
+  hokutetsuOverride,
+  chitetsuOverride,
+  echizenOverride,
+  tokitetsuOverride,
+  shinanoOverride,
+  toeiSubwayOverride,
+  toeiTodenOverride,
+  toeiToneriOverride,
+  kotodenOverride,
+  yuiRailOverride,
+  sapporoOverride,
+  jrKyushuComputedOverride,
+  jrWestSetoComputedOverride,
+  kintetsuComputedOverride,
+  nankaiComputedOverride,
+  chibaMonorailOverride,
+  kobeNewTransitOverride,
+  kitakyushuMonorailOverride,
+  newShuttleOverride,
+  linimoOverride,
+  sanrikuOverride,
+  orangeOverride,
+  tosakuroGomenAdjacentOverride,
+  tenhamaOverride,
+  matsuuraOverride,
+  akitaNairikuSpecialOverride,
+  sendaiAirportOverride,
+  akechiOverride,
+  wakasaOverride,
+  abukumaOverride,
+  ichibataOverride,
+  fukutetsuOverride,
+  oigawaOverride,
+  yamagataTetsudoOverride,
+  watetsuOverride,
+  mokaOverride,
+  kumagawaOverride,
+  tsugaruOverride,
+  yuriKogenOverride,
+  hokuetsuOverride,
+  hitachinakaOverride,
+  gakunanOverride,
+  yaganOverride,
+  guidewayOverride,
+  hojoOverride,
+  johokuOverride,
+  shigarakiOverride,
+  kurobeOverride,
+  asaKaiganOverride,
+  eizanOverride,
+  chikuhoOverride,
+  kitakyuComputedOverride,
+  meitetsuComputedOverride,
+].map((o) => fareOverrideSchema.parse(o));
+// 富山地方鉄道・しなの鉄道の距離表は枝刈りの下界専用で、公表営業キロではなく
+// graph.json の駅間距離（座標から求めて実営業キロで補正した値）で帯を切ってある。
+// 探索が calculator に渡すのもこの距離なので、検証も同じ距離でなければ意味がない
+// （公表営業キロで検証していたときは、実際には5ペアで下界が破れているのに緑だった）。
+// 探索が運賃を引くのに使うのは営業キロではなく運賃計算キロ（GraphEdge.fareKm）。
+// 擬制キロのある事業者はこちらで検証しなければ意味がない
+const graphKmCache = new Map<string, Map<string, number>>();
+function graphKmOf(operator: string, useFareKm = false): Map<string, number> {
+  const cacheKey = useFareKm ? `${operator}:fare` : operator;
+  const hit = graphKmCache.get(cacheKey);
+  if (hit) return hit;
+  const graph = JSON.parse(
+    readFileSync("data/graph.json", "utf8"),
+  ) as RailGraph;
+  const ids = Object.values(graph.nodes)
+    .filter((n) => n.operator === operator)
+    .map((n) => n.id);
+  const inSet = new Set(ids);
+  const adj = new Map<string, [string, number][]>();
+  const link = (a: string, b: string, km: number) => {
+    let l = adj.get(a);
+    if (!l) adj.set(a, (l = []));
+    l.push([b, km]);
+  };
+  for (const e of graph.edges) {
+    if (!inSet.has(e.from) || !inSet.has(e.to)) continue;
+    // transfer は区間を確定しないので、同一事業者内のものは距離0の辺として含める
+    if (e.kind === "rail" && e.operator !== operator) continue;
+    const km = useFareKm ? (e.fareKm ?? e.km) : e.km;
+    link(e.from, e.to, km);
+    link(e.to, e.from, km);
+  }
+  const byName = new Map<string, string[]>();
+  for (const id of ids) {
+    const nm = graph.nodes[id]!.name;
+    let l = byName.get(nm);
+    if (!l) byName.set(nm, (l = []));
+    l.push(id);
+  }
+  const out = new Map<string, number>();
+  for (const [from, starts] of byName) {
+    const dist = new Map<string, number>();
+    const pq: [number, string][] = [];
+    for (const id of starts) {
+      dist.set(id, 0);
+      pq.push([0, id]);
+    }
+    while (pq.length > 0) {
+      pq.sort((a, b) => a[0] - b[0]);
+      const head = pq.shift()!;
+      const [d, cur] = head;
+      if (d > (dist.get(cur) ?? Infinity)) continue;
+      for (const [nx, km] of adj.get(cur) ?? []) {
+        const nd = d + km;
+        if (nd < (dist.get(nx) ?? Infinity)) {
+          dist.set(nx, nd);
+          pq.push([nd, nx]);
+        }
+      }
+    }
+    for (const [to, targets] of byName) {
+      if (from === to) continue;
+      const km = Math.min(...targets.map((id) => dist.get(id) ?? Infinity));
+      if (Number.isFinite(km)) out.set([from, to].sort().join("\u0000"), km);
+    }
+  }
+  graphKmCache.set(cacheKey, out);
+  return out;
+}
+
+/** 探索が運賃を引くのに使う距離（運賃計算キロ） */
+const graphFareKmOf = (operator: string) => graphKmOf(operator, true);
+
+const calc = createFareCalculator(rules, overrides);
+
+// 本番(lib/server/graph-store.ts)は data/fare-rules/ をディレクトリごと読むが、この
+// テストは import を1本ずつ並べている。運賃表を追加して import を足し忘れると、
+// 本番だけ新しい表を使いテストは汎用フォールバックを引く、という食い違いが起きる。
+// しかもテストは「落ちない」ので気づけない。ファイル一覧と突き合わせて検出する。
+describe("運賃表の読み込み漏れ検出", () => {
+  it("data/fare-rules/ の全ファイルがこのテストの rules に含まれている", () => {
+    const onDisk = readdirSync("data/fare-rules")
+      .filter((f) => f.endsWith(".json"))
+      .map((f) => f.replace(/\.json$/, ""))
+      .sort();
+    const loaded = rules.map((r) => r.id).sort();
+    expect(loaded).toEqual(onDisk);
+  });
+
+  // 特定運賃(data/fare-overrides/)も本番はディレクトリごと読む。こちらを足し忘れると
+  // 本番だけ上書きが効きテストは距離表のままになる、という逆向きの食い違いが起きる。
+  // ファイル数だけ比べると「1つ足し忘れて別の1つを二重に import」したときに
+  // 件数が相殺されて通ってしまうので、operator の集合で突き合わせる。
+  it("data/fare-overrides/ の全ファイルがこのテストの overrides に含まれている", () => {
+    const onDisk = readdirSync("data/fare-overrides")
+      .filter((f) => f.endsWith(".json"))
+      .map(
+        (f) =>
+          (
+            JSON.parse(
+              readFileSync(`data/fare-overrides/${f}`, "utf8"),
+            ) as FareOverride
+          ).operator,
+      )
+      .sort();
+    expect(overrides.map((o) => o.operator).sort()).toEqual(onDisk);
+  });
+});
+
+// 実区間照合テストは、加算運賃・特定運賃のかからない一般区間を選び実運賃と toBe で完全一致検証する
+// （brief参照）。一致しない区間は「表で表現できない特殊運賃が乗っている」ことを意味するため、
+// 一般区間に差し替える方針とし、許容誤差での妥協は行わない。
+
+describe("FareCalculator", () => {
+  it("km=0 は 0 円", () => {
+    expect(calc.estimate("JR東日本", 0)).toBe(0);
+  });
+
+  // JR東日本の表は基準額表と同じ3400kmまで帯を持つので、外挿が効くのはその先だけ
+  // （実在の経路はここまで届かない）。以前は100km超をすべて外挿で近似していた
+  it("表を超える距離は賃率で外挿し 10 円単位に丸める", () => {
+    const fare = calc.estimate("JR東日本", 3500);
+    expect(fare).toBe(Math.ceil((31570 + 100 * 16.2) / 10) * 10);
+  });
+
+  it("未知の事業者はフォールバック表を使う", () => {
+    expect(calc.estimate("謎電鉄", 5)).toBe(200);
+  });
+
+  describe("JR東日本（2026年3月14日改定後・幹線に統合）", () => {
+    // 出典: https://jr-group.jp/higashinihon-fare/ (2026-08-24取得)
+    // 実運賃はJR東日本公式改定告知・報道(travel.watch.impress.co.jp等)のきっぷ運賃で照合。
+    // いずれも加算運賃・特定運賃のない幹線区間のため表と完全一致するはず
+    it("新宿→東京 10.3km、実運賃260円（きっぷ。改定前210円）", () => {
+      expect(calc.estimate("JR東日本", 10.3)).toBe(260);
+    });
+
+    it("東京→横浜 28.8km、実運賃530円（きっぷ。改定前490円）", () => {
+      expect(calc.estimate("JR東日本", 28.8)).toBe(530);
+    });
+
+    it("東京→大宮 30.3km、実運賃620円（きっぷ。改定前580円）", () => {
+      expect(calc.estimate("JR東日本", 30.3)).toBe(620);
+    });
+  });
+
+  describe("JR東海（改定なし・据え置き）", () => {
+    // 出典: https://jr-group.jp/tokai-fare/ (2026-08-24取得)。改定前と同一表であることを確認済み
+    // 実運賃はekitan.com等の運賃検索で照合。特定運賃のない東海道本線区間のため表と完全一致するはず
+    it("豊橋→浜松 36.5km、実運賃680円", () => {
+      // 営業キロは豊橋(東京起点293.6km)・浜松(同257.1km)の差分で再検証した値。
+      // 旧コメントの39.7kmは誤り（36-40km帯のため運賃自体への影響はない）
+      expect(calc.estimate("JR東海", 36.5)).toBe(680);
+    });
+
+    it("浜松→静岡 76.9km、実運賃1,340円", () => {
+      expect(calc.estimate("JR東海", 76.9)).toBe(1340);
+    });
+
+    it("東京～熱海間相当のような幹線100km超級: 表の外挿値が妥当な範囲であること", () => {
+      const fare = calc.estimate("JR東海", 120);
+      expect(fare).toBeGreaterThan(1690);
+      expect(fare).toBeLessThan(2200);
+    });
+  });
+
+  describe("100km超の基準額表（JR本州3社が使う階段テーブル、線形外挿ではなく完全一致）", () => {
+    // 出典: http://web.archive.org/web/20260306174402/https://www.jreast.co.jp/2026unchin-kaitei/assets/pdf/kijun_kasan_futsuu.pdf
+    // （Wayback Machine経由で全文取得、2026-08-29）。JR東海・JR西日本はこの基準額表と同一の運賃を使う。
+    // 従来のbeyond線形式(baseFare+(km-100)*16.2)では250.8km=4,140円になり公式4,510円と-370円ズレていた。
+    it("250.8km(281〜300km帯ではなく241〜260km帯)、基準額表どおり4,510円（JR東海）", () => {
+      expect(calc.estimate("JR東海", 250.8)).toBe(4510);
+    });
+
+    it("293.6km(281〜300km帯)、基準額表どおり5,170円（JR東海）", () => {
+      expect(calc.estimate("JR東海", 293.6)).toBe(5170);
+    });
+
+    it("303.9km(301〜320km帯)、基準額表どおり5,500円（JR東海）", () => {
+      expect(calc.estimate("JR東海", 303.9)).toBe(5500);
+    });
+
+    it("250.8kmはJR西日本でも同じ基準額表で4,510円", () => {
+      expect(calc.estimate("JR西日本", 250.8)).toBe(4510);
+    });
+
+    it("293.6kmはJR西日本でも同じ基準額表で5,170円", () => {
+      expect(calc.estimate("JR西日本", 293.6)).toBe(5170);
+    });
+
+    it("303.9kmはJR西日本でも同じ基準額表で5,500円", () => {
+      expect(calc.estimate("JR西日本", 303.9)).toBe(5500);
+    });
+  });
+
+  describe("JR西日本（電車特定区間外・幹線が実質据え置き）", () => {
+    // 出典: https://www.westjr.co.jp/press/article/items/240515_00_press_keihanshin_unchin.pdf
+    // 幹線(拡大区間)は2025年4月改定でも金額変更なし。電車特定区間内の都市部ルートは
+    // 特定運賃・別表のため、ここでは電車特定区間外の路線（加算運賃・特定運賃なし）で検証する
+    it("岡山→倉敷 15.9km、実運賃330円（山陽本線）", () => {
+      expect(calc.estimate("JR西日本", 15.9)).toBe(330);
+    });
+
+    it("姫路→岡山 87.6km、実運賃1,520円（山陽本線）", () => {
+      expect(calc.estimate("JR西日本", 87.6)).toBe(1520);
+    });
+
+    it("鳥取→米子 92.7km、実運賃1,690円（山陰本線）", () => {
+      expect(calc.estimate("JR西日本", 92.7)).toBe(1690);
+    });
+  });
+
+  describe("JR九州（2025年4月1日改定後）", () => {
+    // 出典: https://www.jrkyushu.co.jp/railway/kaitei/pdf/241217_unchinkaitei_guidebook.pdf
+    // （公式運賃改定ガイドブック、2026-08-29取得。距離帯別普通運賃表を全帯照合し表と完全一致）
+    it("博多→二日市 14.2km、実運賃340円（鹿児島本線）", () => {
+      expect(calc.estimate("JR九州", 14.2)).toBe(340);
+    });
+
+    it("初乗り運賃(1〜3km)が200円", () => {
+      expect(calc.estimate("JR九州", 2)).toBe(200);
+    });
+
+    it("4〜6kmが240円", () => {
+      expect(calc.estimate("JR九州", 5)).toBe(240);
+    });
+  });
+
+  describe("JR北海道（2025年4月1日改定後）", () => {
+    // 出典: https://jr-group.jp/hokkaido-fare/ (2026-08-24取得)
+    it("札幌→小樽 33.8km、実運賃800円（函館本線）", () => {
+      expect(calc.estimate("JR北海道", 33.8)).toBe(800);
+    });
+
+    it("初乗り運賃(1〜3km)が210円", () => {
+      expect(calc.estimate("JR北海道", 2)).toBe(210);
+    });
+
+    // 100km超は公式の普通旅客運賃PDF（幹線61帯・1400kmまで）から入れた。
+    // 以前は100kmまでの16帯と22.0円/kmの線形外挿で、348.5kmでは7,710円と
+    // 実額より560円高く出ていた（到達できる駅を落とす側の誤り）。
+    // 出典: ekitan.com (2026-09-25取得、乗車券のみ)
+    it("札幌→釧路 348.5km は 7,150円", () => {
+      expect(calc.estimate("JR北海道", 348.5)).toBe(7150);
+    });
+
+    it("100kmを超えても線形には増えない（賃率が下がる）", () => {
+      // 200km→400kmで運賃は2倍にならない
+      const a = calc.estimate("JR北海道", 200);
+      const b = calc.estimate("JR北海道", 400);
+      expect(b).toBeLessThan(a * 2);
+    });
+  });
+
+  describe("加算運賃（JR）", () => {
+    // 出典: JR九州 運賃改定ガイドブック p4「加算運賃」。
+    // 宮崎空港線 田吉〜宮崎空港の130円。ガイドブックの例では宮崎〜宮崎空港が
+    // 運賃計算キロ6.2kmで普通運賃270円＋加算130円＝400円。
+    // 本実装は370円で30円低い。原因は加算運賃ではなく、graph.json が同じ物理区間を
+    // 運転系統名ごとに重複して持っており（南宮崎〜田吉が「JR宮崎空港線」＝幹線と
+    // 「JR日南線」＝地方交通線の2本）、最短経路が擬制キロの小さいほうを選ぶこと。
+    // 加算運賃を入れる前は240円だったので、改善してはいる。
+    it("宮崎→宮崎空港に加算運賃130円が乗る", () => {
+      const km = graphFareKmOf("JR九州").get(
+        ["宮崎", "宮崎空港"].sort().join("\u0000"),
+      );
+      expect(km).toBeDefined();
+      expect(
+        calc.estimate("JR九州", km!, "宮崎", "宮崎空港") -
+          calc.estimate("JR九州", km!),
+      ).toBe(130);
+    });
+
+    it("宮崎空港を通らない区間には加算運賃が乗らない", () => {
+      const km = graphFareKmOf("JR九州").get(
+        ["宮崎", "田吉"].sort().join("\u0000"),
+      );
+      expect(km).toBeDefined();
+      expect(calc.estimate("JR九州", km!, "宮崎", "田吉")).toBe(
+        calc.estimate("JR九州", km!),
+      );
+    });
+
+    // 出典: JR四国の公開加算額表（本四備讃線 児島〜宇多津18.1kmの110円を含む）。
+    // graph.json ではこの区間が瀬戸大橋線としてJR西日本のエッジになっている。
+    // JR西日本（1,150駅）の全駅間距離を作るので数秒かかり、全体を並列実行すると
+    // 既定の5秒を超えて落ちる（値の誤りではない）。時間を延ばしておく
+    it("岡山→宇多津に本四備讃線の加算運賃110円が乗る", () => {
+      const km = graphFareKmOf("JR西日本").get(
+        ["岡山", "宇多津"].sort().join("\u0000"),
+      );
+      expect(km).toBeDefined();
+      expect(
+        calc.estimate("JR西日本", km!, "岡山", "宇多津") -
+          calc.estimate("JR西日本", km!),
+      ).toBe(110);
+    }, 60_000);
+  });
+
+  describe("JR四国", () => {
+    // 出典: https://www.jr-shikoku.co.jp/teiki/pdf/fare_change.pdf
+    // （公式2023年5月20日改定案内、2026-08-29取得。距離帯別普通運賃表を全帯照合し表と完全一致）
+    // 予讃線・土讃線・高徳線・本四備讃線は幹線区分であり営業キロをそのまま運賃表に当てはめる。
+    // 同資料によれば瀬戸大橋線・地方交通線関連の特定運賃はこの改定で廃止済みのため、
+    // 予讃線内の一般区間なら特殊運賃の心配なく完全一致で照合できる
+    it("初乗り運賃(1〜3km)が190円", () => {
+      expect(calc.estimate("JR四国", 2)).toBe(190);
+    });
+
+    it("高松→坂出 21.3km、実運賃530円（予讃線）", () => {
+      expect(calc.estimate("JR四国", 21.3)).toBe(530);
+    });
+
+    it("高松→丸亀 28.5km、実運賃630円（予讃線）", () => {
+      expect(calc.estimate("JR四国", 28.5)).toBe(630);
+    });
+  });
+
+  describe("近畿日本鉄道", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/kintetsu_fare (2026-08-24取得)
+    it("大阪難波→近鉄奈良 32.8km、実運賃680円", () => {
+      expect(calc.estimate("近畿日本鉄道", 32.8)).toBe(680);
+    });
+
+    it("初乗り運賃(1〜3km)が180円", () => {
+      expect(calc.estimate("近畿日本鉄道", 2)).toBe(180);
+    });
+
+    it("100kmを超えても公式の帯どおり（外挿していない）", () => {
+      // 賃率14円/kmで外挿すると2,370円になってしまう区間
+      expect(calc.estimate("近畿日本鉄道", 150)).toBe(2310);
+    });
+
+    // 距離を直値で書いてはいけない。実行時に使われるのは graph.json の距離なので、
+    // 直値だとグラフ側が狂っても気づけない。実際に全国鉄道運行本数データの
+    // 難波線の区間キロが2.8km（正しくは2.0km）だったため 190.5km と出ており、
+    // 181〜190km帯の2,860円ではなく191〜200km帯の3,000円になっていた。
+    // 差し替えは data/kilometrage-corrections.json。
+    it("大阪難波→近鉄名古屋は 189.7km で 2,860円（graph.json の距離で検証）", () => {
+      const km = graphFareKmOf("近畿日本鉄道").get(
+        ["大阪難波", "近鉄名古屋"].sort().join("\u0000"),
+      );
+      expect(km).toBeCloseTo(189.7, 1);
+      expect(calc.estimate("近畿日本鉄道", km!, "大阪難波", "近鉄名古屋")).toBe(
+        2860,
+      );
+    });
+
+    // 鳥羽線・けいはんな線・吉野線・湯の山線・志摩線には加算運賃がかかる。
+    // 距離帯表は加算前の額なので、入れないと実額より安く出る（到達できない駅を
+    // 到達できると言う側の誤り）。data/fare-overrides/kintetsu-computed.json に
+    // 「距離帯の額＋加算額」を焼いてある。
+    //
+    // この3点は加算額表の対象路線を特定するのに使った実運賃そのもの。
+    // 生成の過程が変わっても、ここが合わなくなったら気づける。
+    describe("加算運賃（実運賃で照合した3区間）", () => {
+      it("大阪難波→賢島 は 2,770円（表2,710＋鳥羽線30＋志摩線30）", () => {
+        expect(calc.estimate("近畿日本鉄道", 195.2, "大阪難波", "賢島")).toBe(
+          2770,
+        );
+      });
+
+      it("近鉄四日市→湯の山温泉 は 460円（表430＋湯の山線30）", () => {
+        expect(
+          calc.estimate("近畿日本鉄道", 15.4, "近鉄四日市", "湯の山温泉"),
+        ).toBe(460);
+      });
+
+      it("大阪阿部野橋→吉野 は 1,170円（表1,140＋吉野線30）", () => {
+        expect(
+          calc.estimate("近畿日本鉄道", 64.9, "大阪阿部野橋", "吉野"),
+        ).toBe(1170);
+      });
+
+      it("加算対象を通らない区間には加算しない", () => {
+        // 大阪難波→近鉄奈良は奈良線だけで完結する
+        expect(
+          calc.estimate("近畿日本鉄道", 32.8, "大阪難波", "近鉄奈良"),
+        ).toBe(680);
+      });
+    });
+  });
+
+  describe("名古屋鉄道（2024年3月16日改定後）", () => {
+    // 出典: 名鉄公式プレスリリース 23-09-01（2026-08-24取得）
+    // 名鉄名古屋～犬山（犬山線）は加算運賃対象路線（知多新線・豊田線・羽島線・空港線）にも
+    // 特定運賃区間（名古屋本線の金山〜一宮系統）にも該当しない一般区間。
+    // 実運賃はekitan.comの運賃検索(2026-08-29取得)で照合し表と完全一致
+    // 名鉄は線区ごとに擬制率をかけた運賃計算キロで運賃を決める（A線区=名古屋本線は
+    // そのまま、B線区15%増、C線区25%増）。営業キロのまま距離帯を引くと安く出る。
+    // data/fare-overrides/meitetsu-computed.json に計算済みの実額を焼いてある。
+    //
+    // この4点は実運賃そのもの。距離はグラフの営業キロを渡して、
+    // 生成の過程が変わったら落ちるようにしてある。
+    it("名鉄名古屋→犬山 は 630円（営業キロ27.9のままだと570円）", () => {
+      const key = ["名鉄名古屋", "犬山"].sort().join("\u0000");
+      // 探索は運賃計算キロで引く。擬制キロが効いて 630円 になる
+      expect(
+        calc.estimate("名古屋鉄道", graphFareKmOf("名古屋鉄道").get(key)!),
+      ).toBe(630);
+      // 営業キロのままだと1帯安い。直っていることを同時に固定する
+      expect(
+        calc.estimate("名古屋鉄道", graphKmOf("名古屋鉄道").get(key)!),
+      ).toBe(570);
+    });
+
+    it.each([
+      ["常滑", "中部国際空港", 330],
+      ["太田川", "中部国際空港", 650],
+      ["名鉄名古屋", "中部国際空港", 980],
+    ])("%s→%s は %i円（擬制キロ＋空港線の加算運賃）", (from, to, fare) => {
+      const d = graphFareKmOf("名古屋鉄道").get(
+        [from, to].sort().join("\u0000"),
+      );
+      expect(d).toBeDefined();
+      expect(
+        calc.estimate("名古屋鉄道", d!, from as string, to as string),
+      ).toBe(fare);
+    });
+
+    it("初乗り運賃(1〜3km)が180円", () => {
+      expect(calc.estimate("名古屋鉄道", 2)).toBe(180);
+    });
+  });
+
+  describe("東武鉄道（公式運賃対キロ表より）", () => {
+    // 出典: https://www.tobu.co.jp/pdf/ticket/unchinTable.pdf (2026-08-24取得)
+    // 実運賃はジョルダン乗換案内(2026-08-29取得)で照合し表と完全一致
+    it("浅草→東武動物公園 41.0km、実運賃610円（きっぷ、IC607円）", () => {
+      expect(calc.estimate("東武鉄道", 41.0)).toBe(610);
+    });
+
+    it("初乗り運賃(1〜4km)が160円", () => {
+      expect(calc.estimate("東武鉄道", 3)).toBe(160);
+    });
+
+    // 小泉線は館林〜東小泉〜太田を、遠回りな伊勢崎線経由に合わせた擬制キロ
+    // 20.1km で運賃計算する（実キロは16.2km）。実キロで引くと330円で50円安く
+    // 出るが、この擬制キロは全国鉄道運行本数データの区間営業キロ（館林〜東小泉
+    // 11.0km）の側にすでに入っており、graph.json の km がそれになっている。
+    // 名鉄やJR地方交通線のように fareKm で持つ必要はない。
+    // 実運賃は ekitan.com (2026-09-25取得) で380円/20.1kmを確認。
+    it("小泉線の館林→太田は擬制キロ20.1kmで380円（実キロ16.2kmなら330円）", () => {
+      expect(
+        graphKmOf("東武鉄道").get(["館林", "太田"].sort().join("\u0000")),
+      ).toBeCloseTo(20.1, 3);
+      expect(calc.estimate("東武鉄道", 20.1)).toBe(380);
+      expect(calc.estimate("東武鉄道", 16.2)).toBe(330);
+    });
+  });
+
+  describe("特定運賃（駅ペア単位の割引運賃）", () => {
+    // 出典: https://www.westjr.co.jp/press/article/items/240515_00_press_keihanshin_unchin.pdf
+    // 別紙4（2026-08-29取得）。大阪→京都は営業キロ42.8kmで幹線表なら770円だが特定運賃580円。
+    it("特定運賃が設定された駅ペアは距離表ではなく特定運賃を返す", () => {
+      expect(calc.estimate("JR西日本", 42.8, "大阪", "京都")).toBe(580);
+    });
+
+    it("方向を入れ替えても同じ特定運賃になる", () => {
+      expect(calc.estimate("JR西日本", 42.8, "京都", "大阪")).toBe(580);
+    });
+
+    it("駅名を与えなければ従来どおり距離表を引く", () => {
+      expect(calc.estimate("JR西日本", 42.8)).toBe(770);
+    });
+
+    it("特定運賃の無いペアは距離表を引く", () => {
+      expect(calc.estimate("JR西日本", 42.8, "大阪", "存在しない駅")).toBe(770);
+    });
+
+    it("override 未設定の事業者は駅名を渡しても距離表を引く", () => {
+      // JR東海の距離表(jr-central.json)で42.8kmは41-45km帯=770円。JR西日本の特定運賃580円とは無関係。
+      expect(calc.estimate("JR東海", 42.8, "大阪", "京都")).toBe(770);
+    });
+  });
+
+  describe("JR東日本の特定運賃（駅探の実測による、jreast.co.jpはbot保護で一次情報取得不可のため）", () => {
+    // 出典: 駅探(ekitan.com) 2026-08-29取得。data/fare-overrides/jr-east.json 参照。
+    // 公式営業キロで距離表を引いた値と、駅探が返す実運賃（きっぷ）が乖離する区間のみを特定運賃として採用。
+    it("新宿→八王子 37.1km、実運賃620円（京王線と競合、表なら720円）", () => {
+      expect(calc.estimate("JR東日本", 37.1, "新宿", "八王子")).toBe(620);
+    });
+
+    it("新宿→高尾 42.8km、実運賃720円（京王線・高尾山口方面と競合、表なら810円）", () => {
+      expect(calc.estimate("JR東日本", 42.8, "新宿", "高尾")).toBe(720);
+    });
+
+    it("品川→横浜 22.0km、実運賃350円（京急本線と競合、表なら440円）", () => {
+      expect(calc.estimate("JR東日本", 22.0, "品川", "横浜")).toBe(350);
+    });
+  });
+
+  describe("東京メトロ（2023年3月18日改定後）", () => {
+    // 出典: https://www.tokyometro.jp/safety/barrierfree/pdf/barrierfree_price_230525.pdf
+    // 実運賃はekitan.com(2026-08-29取得)で照合し、いずれも特定運賃の対象外区間
+    it("浅草→渋谷(銀座線) 14.3km、実運賃260円", () => {
+      expect(calc.estimate("東京メトロ", 14.3)).toBe(260);
+    });
+
+    it("和光市→渋谷(副都心線) 20.4km、実運賃300円", () => {
+      expect(calc.estimate("東京メトロ", 20.4)).toBe(300);
+    });
+
+    it("中野→西船橋(東西線) 30.8km、実運賃330円", () => {
+      expect(calc.estimate("東京メトロ", 30.8)).toBe(330);
+    });
+  });
+
+  describe("東京都交通局（2019年10月1日改定後）", () => {
+    // 出典: https://ja.wikipedia.org/wiki/都営地下鉄
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("新宿→本八幡(都営新宿線) 23.5km、実運賃380円", () => {
+      expect(calc.estimate("東京都交通局", 23.5)).toBe(380);
+    });
+
+    it("西馬込→押上(都営浅草線) 18.3km、実運賃330円", () => {
+      expect(calc.estimate("東京都交通局", 18.3)).toBe(330);
+    });
+
+    it("光が丘→都庁前(都営大江戸線) 12.1km、実運賃280円", () => {
+      expect(calc.estimate("東京都交通局", 12.1)).toBe(280);
+    });
+  });
+
+  describe("Osaka Metro（2023年4月1日改定後）", () => {
+    // 出典: https://ja.wikipedia.org/wiki/Osaka_Metro
+    // 実運賃はekitan.com(2026-08-29取得)で照合。夢洲発着は加算運賃90円がかかるため対象外
+    it("梅田→心斎橋(御堂筋線) 3.2km、実運賃240円", () => {
+      expect(calc.estimate("Osaka Metro", 3.2)).toBe(240);
+    });
+
+    it("江坂→なかもず(御堂筋線) 24.5km、実運賃390円（19km超はフラット）", () => {
+      expect(calc.estimate("Osaka Metro", 24.5)).toBe(390);
+    });
+
+    it("大日→八尾南(谷町線) 28.3km、実運賃390円（19km超はフラット）", () => {
+      expect(calc.estimate("Osaka Metro", 28.3)).toBe(390);
+    });
+  });
+
+  describe("名古屋市交通局", () => {
+    // 出典: https://www.kotsu.city.nagoya.jp/rp/subway/trp0000172.htm
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("名古屋→栄(東山線) 2.4km、実運賃210円", () => {
+      expect(calc.estimate("名古屋市交通局", 2.4)).toBe(210);
+    });
+
+    it("名古屋→金山(東山線・名城線) 5.4km、実運賃240円", () => {
+      expect(calc.estimate("名古屋市交通局", 5.4)).toBe(240);
+    });
+
+    it("高畑→藤が丘(東山線全線) 20.6km、実運賃340円（15km超はフラット）", () => {
+      expect(calc.estimate("名古屋市交通局", 20.6)).toBe(340);
+    });
+  });
+
+  describe("南海電鉄（2023年10月1日改定後）", () => {
+    // 出典: https://www.mlit.go.jp/common/001583779.pdf（運輸審議会説明資料）
+    // 実運賃はekitan.com(2026-08-29取得)で照合。難波～三国ヶ丘・中百舌鳥はJR西日本・Osaka Metroとの
+    // 競合特定運賃(350円)の対象区間のため使用しない
+    it("難波→堺(南海本線) 9.8km、実運賃290円", () => {
+      expect(calc.estimate("南海電鉄", 9.8)).toBe(290);
+    });
+
+    it("難波→岸和田(南海本線) 26.0km、実運賃540円", () => {
+      expect(calc.estimate("南海電鉄", 26.0)).toBe(540);
+    });
+
+    it("難波→橋本(高野線) 43.8km、実運賃740円", () => {
+      expect(calc.estimate("南海電鉄", 43.8)).toBe(740);
+    });
+  });
+
+  describe("西武鉄道（2026年3月14日改定後）", () => {
+    // 出典: https://www.seiburailway.jp/file.jsp?file%2F202603_fare_bykm.pdf=
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("池袋→所沢(池袋線) 24.8km、実運賃410円", () => {
+      expect(calc.estimate("西武鉄道", 24.8)).toBe(410);
+    });
+
+    it("池袋→飯能(池袋線) 43.7km、実運賃560円", () => {
+      expect(calc.estimate("西武鉄道", 43.7)).toBe(560);
+    });
+
+    it("西武新宿→本川越(新宿線) 47.5km、実運賃600円", () => {
+      expect(calc.estimate("西武鉄道", 47.5)).toBe(600);
+    });
+  });
+
+  describe("阪急電鉄（2023年4月1日改定後）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/hankyu_fare
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("大阪梅田→西宮北口(神戸線) 15.6km、実運賃280円", () => {
+      expect(calc.estimate("阪急電鉄", 15.6)).toBe(280);
+    });
+
+    it("大阪梅田→神戸三宮(神戸線) 32.3km、実運賃330円", () => {
+      expect(calc.estimate("阪急電鉄", 32.3)).toBe(330);
+    });
+
+    it("大阪梅田→京都河原町(京都線) 47.7km、実運賃410円", () => {
+      expect(calc.estimate("阪急電鉄", 47.7)).toBe(410);
+    });
+  });
+
+  describe("広島電鉄（2025年2月1日改定・全線240円均一）", () => {
+    // 出典: https://news.railway-pressnet.com/archives/69108
+    // 実運賃はekitan.com(2026-08-29取得)で照合。均一運賃のため距離によらず240円
+    it("紙屋町東付近 1.9km、実運賃240円", () => {
+      expect(calc.estimate("広島電鉄", 1.9)).toBe(240);
+    });
+
+    it("宮島線全線 21.3km、実運賃240円", () => {
+      expect(calc.estimate("広島電鉄", 21.3)).toBe(240);
+    });
+
+    it("極端に短い距離でも240円", () => {
+      expect(calc.estimate("広島電鉄", 0.5)).toBe(240);
+    });
+  });
+
+  describe("京王電鉄（2023年10月1日改定後）", () => {
+    // 出典: https://www.keio.co.jp/train/ticket/fare_chart/fare_chart_km.html
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("新宿→高尾 43.0km、実運賃410円（JR中央線経由720円より安い）", () => {
+      expect(calc.estimate("京王電鉄", 43.0)).toBe(410);
+    });
+
+    it("新宿→京王八王子 37.9km、実運賃410円", () => {
+      expect(calc.estimate("京王電鉄", 37.9)).toBe(410);
+    });
+
+    it("新宿→調布 15.5km、実運賃280円", () => {
+      expect(calc.estimate("京王電鉄", 15.5)).toBe(280);
+    });
+  });
+
+  describe("京急電鉄（2023年10月1日改定後）", () => {
+    // 出典: https://www.keikyu.co.jp/cp/unchinkaitei/pdf/futsuu_unchin.pdf
+    // 実運賃はekitan.com(2026-08-29取得)で照合。品川〜横浜・京急川崎〜横浜はJRと競合する
+    // 特定運賃(fare-overrides/keikyu.json)のため、ここでは一般表と一致する区間のみ使用
+    it("金沢文庫→横須賀中央 10.4km、実運賃280円", () => {
+      expect(calc.estimate("京急電鉄", 10.4)).toBe(280);
+    });
+
+    it("金沢文庫→品川 39.5km、実運賃510円", () => {
+      expect(calc.estimate("京急電鉄", 39.5)).toBe(510);
+    });
+
+    it("品川→横須賀中央 49.9km、実運賃620円", () => {
+      expect(calc.estimate("京急電鉄", 49.9)).toBe(620);
+    });
+
+    it("品川→横浜はJRと競合する特定運賃320円（一般表なら350円）", () => {
+      expect(calc.estimate("京急電鉄", 22.2, "品川", "横浜")).toBe(320);
+    });
+  });
+
+  describe("京成電鉄（2024年3月16日改定後・バリアフリー料金込み）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/keisei_fare
+    // 実運賃はekitan.com・京成公式PDF(2026-08-29取得)で照合。成田空港線は加算運賃対象のため除外
+    it("京成上野→青砥 11.5km、実運賃280円", () => {
+      expect(calc.estimate("京成電鉄", 11.5)).toBe(280);
+    });
+
+    it("京成上野→京成船橋 25.1km、実運賃450円", () => {
+      expect(calc.estimate("京成電鉄", 25.1)).toBe(450);
+    });
+
+    it("京成成田→京成上野 61.2km、実運賃860円（京成本線経由・空港第2ビル非経由）", () => {
+      expect(calc.estimate("京成電鉄", 61.2)).toBe(860);
+    });
+  });
+
+  describe("京阪電鉄（2025年10月1日改定後）", () => {
+    // 出典: https://www.keihan.co.jp/traffic/station/assets/pdf/fare/010.pdf（淀屋橋発着運賃表）
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("淀屋橋→京橋(大阪) 3.0km、実運賃180円", () => {
+      expect(calc.estimate("京阪電鉄", 3.0)).toBe(180);
+    });
+
+    it("淀屋橋→枚方市 21.8km、実運賃400円", () => {
+      expect(calc.estimate("京阪電鉄", 21.8)).toBe(400);
+    });
+
+    it("淀屋橋→出町柳 51.6km（京阪線最長区間）、実運賃550円", () => {
+      expect(calc.estimate("京阪電鉄", 51.6)).toBe(550);
+    });
+  });
+
+  describe("京阪大津線（京津線・石山坂本線、駅ペアoverride）", () => {
+    // 出典: https://www.keihan.co.jp/traffic/ticket/information/kirotei.html（営業キロ程）
+    // 実運賃はekitan.com(2026-08-29取得)で照合。operator文字列だけでは京阪線本表と大津線を
+    // 区別できないため、data/fare-overrides/keihan.jsonで大津線の全駅ペアを個別に上書きする。
+    it("御陵→京阪山科(京津線) 1.5km、実運賃200円（本表なら180円）", () => {
+      expect(calc.estimate("京阪電鉄", 1.5, "御陵", "京阪山科")).toBe(200);
+    });
+
+    it("びわ湖浜大津→石山寺(石山坂本線) 6.7km、実運賃280円（本表なら240円）", () => {
+      expect(calc.estimate("京阪電鉄", 6.7, "びわ湖浜大津", "石山寺")).toBe(
+        280,
+      );
+    });
+
+    it("御陵→びわ湖浜大津(京津線) 7.5km、実運賃280円（本表なら240円）", () => {
+      expect(calc.estimate("京阪電鉄", 7.5, "御陵", "びわ湖浜大津")).toBe(280);
+    });
+
+    it("坂本比叡山口→石山寺(石山坂本線全線) 14.1km、実運賃380円（本表なら360円）", () => {
+      expect(calc.estimate("京阪電鉄", 14.1, "坂本比叡山口", "石山寺")).toBe(
+        380,
+      );
+    });
+
+    it("override対象外の駅ペアは京阪線本表を引く", () => {
+      expect(calc.estimate("京阪電鉄", 21.8, "淀屋橋", "枚方市")).toBe(400);
+    });
+  });
+
+  describe("東急電鉄（2023年3月18日改定後・本線対キロ制）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/tokyu_fare
+    // 実運賃はekitan.com(2026-08-29取得)で照合
+    it("渋谷→池尻大橋(田園都市線) 1.9km、実運賃140円", () => {
+      expect(calc.estimate("東急電鉄", 1.9)).toBe(140);
+    });
+
+    it("渋谷→横浜(東横線) 24.2km、実運賃310円", () => {
+      expect(calc.estimate("東急電鉄", 24.2)).toBe(310);
+    });
+
+    it("渋谷→中央林間(田園都市線) 31.5km、実運賃390円", () => {
+      expect(calc.estimate("東急電鉄", 31.5)).toBe(390);
+    });
+  });
+
+  describe("小田急電鉄（2023年3月18日改定後・対キロ区間制）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/odakyu_fare
+    // 実運賃はekitan.com(2026-09-20取得)で照合
+    it("新宿→小田原 82.5km、実運賃910円（表の最終帯）", () => {
+      expect(calc.estimate("小田急電鉄", 82.5)).toBe(910);
+    });
+
+    it("新百合ケ丘→新宿 21.5km、実運賃330円", () => {
+      expect(calc.estimate("小田急電鉄", 21.5)).toBe(330);
+    });
+
+    // 21.5km が 330円 になるのは「18〜21km帯(300円)の上限が21.0km」だから。
+    // 帯の境界を取り違えると 21.5km が 300円 になってしまうため、境界の
+    // 内側(21.0km)も固定して取り違えを検出できるようにする。
+    it("21.0km ちょうどは 300円（帯の上限側の境界）", () => {
+      expect(calc.estimate("小田急電鉄", 21.0)).toBe(300);
+    });
+  });
+
+  describe("阪神電鉄（2023年4月1日改定後・対キロ区間制）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/hanshin_fare
+    // 実運賃はekitan.com(2026-09-20取得)で照合
+    it("大阪梅田→神戸三宮 31.2km、実運賃330円", () => {
+      expect(calc.estimate("阪神電鉄", 31.2)).toBe(330);
+    });
+
+    it("大阪梅田→甲子園 14.1km、実運賃280円", () => {
+      expect(calc.estimate("阪神電鉄", 14.1)).toBe(280);
+    });
+
+    it("13.0km ちょうどは 250円（14.1km=280円 の1つ下の帯）", () => {
+      expect(calc.estimate("阪神電鉄", 13.0)).toBe(250);
+    });
+  });
+
+  describe("埼玉高速鉄道（第三セクター・汎用表では大幅に過小評価になる）", () => {
+    // 出典: 公式駅別運賃表 https://www.s-rail.co.jp/line/akabaneiwabuchi.php 他2駅
+    // 営業キロは https://ja.wikipedia.org/wiki/埼玉高速鉄道線
+    // 3駅ぶんの運賃表から全21ペアを距離と突き合わせて帯を復元した（source.note参照）
+    it("赤羽岩淵→浦和美園 14.6km（全線）、実運賃480円", () => {
+      expect(calc.estimate("埼玉高速鉄道", 14.6)).toBe(480);
+    });
+
+    it("赤羽岩淵→鳩ヶ谷 5.9km、実運賃310円", () => {
+      expect(calc.estimate("埼玉高速鉄道", 5.9)).toBe(310);
+    });
+
+    it("浦和美園→東川口 2.4km（初乗り）、実運賃210円", () => {
+      expect(calc.estimate("埼玉高速鉄道", 2.4)).toBe(210);
+    });
+
+    // 帯の復元が正しいことの要。鳩ヶ谷→浦和美園 8.7km は 350円 で、
+    // 赤羽岩淵→戸塚安行 10.0km の 400円 とは別の帯に入る。
+    it("8.7km は350円、10.0km は400円（9km の帯境界）", () => {
+      expect(calc.estimate("埼玉高速鉄道", 8.7)).toBe(350);
+      expect(calc.estimate("埼玉高速鉄道", 10.0)).toBe(400);
+    });
+
+    // この表を入れた動機。汎用私鉄表なら同じ距離でずっと安くなる
+    it("汎用フォールバック表より高い（第三セクターの高運賃を反映できている）", () => {
+      expect(calc.estimate("埼玉高速鉄道", 14.6)).toBeGreaterThan(
+        calc.estimate("謎電鉄", 14.6),
+      );
+    });
+  });
+
+  describe("西日本鉄道（2026年4月1日改定後・対キロ区間制）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/nishitetsu_fare
+    // 実運賃はekitan.com(2026-09-20取得)で照合
+    it("西鉄福岡(天神)→大牟田 74.8km、実運賃1,140円（表の最終帯）", () => {
+      expect(calc.estimate("西日本鉄道", 74.8)).toBe(1140);
+    });
+
+    it("西鉄二日市→西鉄福岡(天神) 15.2km、実運賃420円", () => {
+      expect(calc.estimate("西日本鉄道", 15.2)).toBe(420);
+    });
+
+    it("13.0km ちょうどは 360円（15.2km=420円 の1つ下の帯）", () => {
+      expect(calc.estimate("西日本鉄道", 13.0)).toBe(360);
+    });
+  });
+
+  describe("東葉高速鉄道（第三セクター・高運賃）", () => {
+    // 出典: 公式駅別運賃表6駅分 https://www.toyokosoku.co.jp/wp/wp-content/themes/trr/print.php?pid=32&sec=sta_fare 他
+    // 営業キロは https://ja.wikipedia.org/wiki/東葉高速鉄道東葉高速線
+    // 48点の実運賃から帯を復元（source.note参照）
+    it("西船橋→東葉勝田台 16.2km（全線）、実運賃640円", () => {
+      expect(calc.estimate("東葉高速鉄道", 16.2)).toBe(640);
+    });
+
+    it("西船橋→東海神 2.1km（初乗り）、実運賃210円", () => {
+      expect(calc.estimate("東葉高速鉄道", 2.1)).toBe(210);
+    });
+
+    it("西船橋→北習志野 8.1km、実運賃440円", () => {
+      expect(calc.estimate("東葉高速鉄道", 8.1)).toBe(440);
+    });
+
+    // 帯境界6本すべてを上下から挟んで固定する。実運賃がどれも帯の内側にあると
+    // 境界を1km取り違えても気づけないため、境界そのものを検証対象にする。
+    it.each([
+      [2.9, 210, 3.7, 300], // 境界 3km
+      [4.9, 300, 5.2, 370], // 境界 5km
+      [6.4, 370, 7.1, 440], // 境界 7km
+      [8.9, 440, 9.1, 520], // 境界 9km
+      [11.0, 520, 11.7, 580], // 境界 11km
+      [13.8, 580, 14.1, 640], // 境界 14km
+    ])(
+      "%skm=%i円 / %skm=%i円（帯境界を上下から固定）",
+      (lowKm, lowFare, highKm, highFare) => {
+        expect(calc.estimate("東葉高速鉄道", lowKm)).toBe(lowFare);
+        expect(calc.estimate("東葉高速鉄道", highKm)).toBe(highFare);
+      },
+    );
+
+    it("汎用フォールバック表より高い（第三セクターの高運賃を反映できている）", () => {
+      expect(calc.estimate("東葉高速鉄道", 16.2)).toBeGreaterThan(
+        calc.estimate("謎電鉄", 16.2),
+      );
+    });
+  });
+
+  describe("相模鉄道（2023年3月18日改定後・対キロ区間制）", () => {
+    // 出典: https://jikokuhyo.train-times.net/data/sotetsu_fare
+    // 実運賃はekitan.com(2026-09-20取得)で照合
+    it("横浜→海老名 24.6km、実運賃330円（表の最終帯）", () => {
+      expect(calc.estimate("相模鉄道", 24.6)).toBe(330);
+    });
+
+    it("海老名→二俣川 14.1km、実運賃250円", () => {
+      expect(calc.estimate("相模鉄道", 14.1)).toBe(250);
+    });
+
+    it("11.0km ちょうどは 210円（14.1km=250円 の1つ下の帯）", () => {
+      expect(calc.estimate("相模鉄道", 11.0)).toBe(210);
+    });
+  });
+
+  describe("均一運賃の路面電車（距離によらず同額）", () => {
+    // いずれも各社公式サイトで「全線均一」と金額を確認（2026-09-20取得、source.note参照）。
+    // 汎用私鉄表は距離で運賃が上がるため、構造そのものが誤りになる事業者群。
+    it.each([
+      ["阪堺電気軌道", 240],
+      ["京福電気鉄道", 250],
+      ["長崎電気軌道", 150],
+      ["熊本市交通局", 200],
+      ["鹿児島市交通局", 200],
+    ])("%s は全線均一 %i円", (operator, fare) => {
+      // 短距離・中距離・長距離のいずれでも同額になることが均一運賃の要件
+      expect(calc.estimate(operator, 0.5)).toBe(fare);
+      expect(calc.estimate(operator, 8)).toBe(fare);
+      expect(calc.estimate(operator, 25)).toBe(fare);
+    });
+
+    it("均一運賃は距離が増えても変わらない（汎用表は増える）", () => {
+      expect(calc.estimate("阪堺電気軌道", 2)).toBe(
+        calc.estimate("阪堺電気軌道", 18),
+      );
+      expect(calc.estimate("謎電鉄", 18)).toBeGreaterThan(
+        calc.estimate("謎電鉄", 2),
+      );
+    });
+  });
+
+  describe("神戸電鉄（国交省認可資料の「改定後」列）", () => {
+    // 出典: 国土交通省近畿運輸局 運賃上限変更認可資料
+    // https://wwwtb.mlit.go.jp/kinki/content/000339193.pdf （令和6年12月25日認可）
+    // 同資料は現行・改定後の2列組なので、どちらが現行かを実運賃で判定する必要があった
+    it("鈴蘭台→三木 19.3km、実運賃600円（改定前なら530円）", () => {
+      expect(calc.estimate("神戸電鉄", 19.3)).toBe(600);
+    });
+
+    it("鈴蘭台→西鈴蘭台 1.3km、実運賃210円（改定前なら180円）", () => {
+      expect(calc.estimate("神戸電鉄", 1.3)).toBe(210);
+    });
+  });
+
+  describe("山陽電気鉄道（2025年1月19日改定後）", () => {
+    // 転記元の2次情報は45〜49km帯を770円としていたが、実測45.1kmは800円だった。
+    // 40〜44km帯の780円より安くなる逆転が起きており、転記元の誤記と判断して訂正した
+    // （詳細は data/fare-rules/sanyo.json の source.note）。
+    it("西代→山陽垂水 9.6km、実運賃320円", () => {
+      expect(calc.estimate("山陽電気鉄道", 9.6)).toBe(320);
+    });
+
+    it("山陽垂水→山陽姫路 45.1km、実運賃800円（転記元の770円は誤り）", () => {
+      expect(calc.estimate("山陽電気鉄道", 45.1)).toBe(800);
+    });
+
+    it("西代→山陽姫路 54.7km（全線）、実運賃860円", () => {
+      expect(calc.estimate("山陽電気鉄道", 54.7)).toBe(860);
+    });
+  });
+
+  // 1事業者が運賃体系の異なる路線群を持つケース。グラフ生成時に事業者名を分けて
+  // いるため（data/operator-splits.json）、運賃表も別々に引かれる。分離前は
+  // 「均一運賃の市電と対キロ制の地下鉄」が1区間として通算され、実際には2回払う
+  // 初乗りが1回分になっていた。
+  describe("運賃体系が分かれる事業者（グラフ生成時に分割済み）", () => {
+    it("札幌市営地下鉄は区数制（3km以下210円、21km以下380円）", () => {
+      expect(calc.estimate("札幌市交通局", 3)).toBe(210);
+      expect(calc.estimate("札幌市交通局", 7)).toBe(250);
+      expect(calc.estimate("札幌市交通局", 20)).toBe(380);
+    });
+
+    it("札幌市電は全線均一230円（距離によらない）", () => {
+      expect(calc.estimate("札幌市交通局(市電)", 1)).toBe(230);
+      expect(calc.estimate("札幌市交通局(市電)", 8)).toBe(230);
+    });
+
+    it("同じ距離でも地下鉄と市電で運賃が違う（分離できている証拠）", () => {
+      expect(calc.estimate("札幌市交通局", 8)).not.toBe(
+        calc.estimate("札幌市交通局(市電)", 8),
+      );
+    });
+
+    // 伊予鉄道の郊外電車は公式が距離帯表を出しておらず、改定前の表に公式告知の
+    // 引き上げ幅（5.0kmまで+20円、5.1kmから+30円）を適用して復元した導出値。
+    // そのため実運賃での検証が必須だった。
+    it("伊予鉄道(郊外電車) 松山市→高浜 9.4km、実運賃520円", () => {
+      expect(calc.estimate("伊予鉄道", 9.4)).toBe(520);
+    });
+
+    it("伊予鉄道(郊外電車) 松山市→横河原 13.2km、実運賃640円", () => {
+      expect(calc.estimate("伊予鉄道", 13.2)).toBe(640);
+    });
+
+    it("伊予鉄道(郊外電車) 初乗り3kmは250円（公式告知と一致）", () => {
+      expect(calc.estimate("伊予鉄道", 3)).toBe(250);
+    });
+
+    it("伊予鉄道(市内線)は全線均一250円", () => {
+      expect(calc.estimate("伊予鉄道(市内線)", 1)).toBe(250);
+      expect(calc.estimate("伊予鉄道(市内線)", 10)).toBe(250);
+    });
+
+    // 渥美線は公式の改定運賃表PDFが全駅ペアの「運賃＋営業キロ」を載せており、
+    // 85組から距離帯を復元した（source.note参照）。帯境界は整数で一意に決まる。
+    it("豊橋鉄道(渥美線) 大清水→新豊橋 8.5km、実運賃310円", () => {
+      expect(calc.estimate("豊橋鉄道", 8.5)).toBe(310);
+    });
+
+    it("豊橋鉄道(渥美線) 新豊橋→三河田原 18.0km（全線）、実運賃550円", () => {
+      expect(calc.estimate("豊橋鉄道", 18.0)).toBe(550);
+    });
+
+    it("豊橋鉄道(市内線)は全線均一200円（全長5.4kmでも同額）", () => {
+      expect(calc.estimate("豊橋鉄道(市内線)", 1)).toBe(200);
+      expect(calc.estimate("豊橋鉄道(市内線)", 5.4)).toBe(200);
+    });
+
+    it("同じ距離でも渥美線と市内線で運賃が違う（分離できている証拠）", () => {
+      expect(calc.estimate("豊橋鉄道", 5.4)).not.toBe(
+        calc.estimate("豊橋鉄道(市内線)", 5.4),
+      );
+    });
+  });
+
+  describe("愛知環状鉄道（公式PDFの三角運賃表から253点で復元）", () => {
+    // 出典: https://www.aikanrailway.co.jp/pdf/press/PressRelease6_138_2.pdf
+    // scripts/fare/derive-table.ts の方式tri-km で復元し、ekitan.comで2点照合
+    it("岡崎→高蔵寺 45.3km（全線）、実運賃990円", () => {
+      expect(calc.estimate("愛知環状鉄道", 45.3)).toBe(990);
+    });
+
+    it("瀬戸市→高蔵寺 6.2km、実運賃330円", () => {
+      expect(calc.estimate("愛知環状鉄道", 6.2)).toBe(330);
+    });
+
+    it("6.0km ちょうどは 270円（6.2km=330円 の1つ下の帯）", () => {
+      expect(calc.estimate("愛知環状鉄道", 6.0)).toBe(270);
+    });
+  });
+
+  describe("仙台市営地下鉄（対キロ区間制・5区分）", () => {
+    // 出典: Wikipedia の区分表。公式PDFはゾーン制の路線図形式で距離帯が読めなかった
+    // 実運賃はekitan.com(2026-09-20取得)で照合
+    it("仙台→泉中央 8.5km、実運賃310円", () => {
+      expect(calc.estimate("仙台市交通局", 8.5)).toBe(310);
+    });
+
+    it("仙台→富沢 6.3km、実運賃310円（2区の境界6.0kmのすぐ外側）", () => {
+      expect(calc.estimate("仙台市交通局", 6.3)).toBe(310);
+    });
+
+    it("6.0km ちょうどは 250円（境界が7kmではなく6kmであること）", () => {
+      expect(calc.estimate("仙台市交通局", 6.0)).toBe(250);
+    });
+
+    it("3.0km ちょうどは 210円（初乗り）", () => {
+      expect(calc.estimate("仙台市交通局", 3.0)).toBe(210);
+    });
+  });
+
+  describe("秩父鉄道（2024年10月1日改定後）", () => {
+    // 公式PDFは画像、国交省の認可資料もテキストが崩れていたため2次情報から復元。
+    // 実運賃はekitan.com(2026-09-21取得)で照合
+    it("熊谷→秩父 44.1km、実運賃950円", () => {
+      expect(calc.estimate("秩父鉄道", 44.1)).toBe(950);
+    });
+
+    it("行田市→熊谷 6.6km、実運賃400円（300円帯の上限6kmのすぐ外側）", () => {
+      expect(calc.estimate("秩父鉄道", 6.6)).toBe(400);
+    });
+
+    it("6.0km ちょうどは 300円", () => {
+      expect(calc.estimate("秩父鉄道", 6.0)).toBe(300);
+    });
+  });
+
+  describe("横浜市営地下鉄（IC運賃を10円切り上げてきっぷ運賃に変換）", () => {
+    // 転記元がIC運賃(1円単位)だったため変換が必要だった。
+    // 変換が正しいことをekitan.com(2026-09-21取得)の実運賃3点で確認している
+    it("桜木町→横浜 2.1km、実運賃210円", () => {
+      expect(calc.estimate("横浜市交通局", 2.1)).toBe(210);
+    });
+
+    it("センター南→横浜 13.9km、実運賃310円（IC304円の切り上げ）", () => {
+      expect(calc.estimate("横浜市交通局", 13.9)).toBe(310);
+    });
+
+    it("あざみ野→湘南台 40.4km、実運賃530円（IC524円の切り上げ）", () => {
+      expect(calc.estimate("横浜市交通局", 40.4)).toBe(530);
+    });
+  });
+
+  describe("長良川鉄道（公式PDFの三角表全体から431点で復元）", () => {
+    // 駅名もキロも無い三角表だが、行 i が駅(i+1)→駅1..i という素直な三角形で
+    // あることを要素数で確認し、Wikipediaの営業キロと突き合わせた。
+    // 単一起点ではなく三角表全体を使っているので、富山地方鉄道で踏んだ
+    // 「帯が隠れる」問題を避けている
+    it("美濃太田→郡上八幡 46.9km、実運賃1,380円", () => {
+      expect(calc.estimate("長良川鉄道", 46.9)).toBe(1380);
+    });
+
+    it("北濃→美濃市 54.4km、実運賃1,540円（美濃太田起点でない組）", () => {
+      expect(calc.estimate("長良川鉄道", 54.4)).toBe(1540);
+    });
+
+    it("帯は3km刻み（3.0km=210円、3.1km=310円）", () => {
+      expect(calc.estimate("長良川鉄道", 3.0)).toBe(210);
+      expect(calc.estimate("長良川鉄道", 3.1)).toBe(310);
+    });
+  });
+
+  describe("樽見鉄道（公式PDFの三角表全体から128点で復元）", () => {
+    // PDFは1行1数値で大人と小児が交互。大人分171個が19駅の三角表と一致し、
+    // 小児が全件その半額であることも確認したうえで営業キロと突き合わせた
+    it("大垣→樽見 34.5km（全線）、実運賃1,000円", () => {
+      expect(calc.estimate("樽見鉄道", 34.5)).toBe(1000);
+    });
+
+    it("神海→大垣 23.6km、実運賃750円", () => {
+      expect(calc.estimate("樽見鉄道", 23.6)).toBe(750);
+    });
+
+    it("樽見→本巣 18.3km、実運賃680円（610円帯の上限18kmのすぐ外側）", () => {
+      expect(calc.estimate("樽見鉄道", 18.3)).toBe(680);
+    });
+
+    it("18.0km ちょうどは 610円", () => {
+      expect(calc.estimate("樽見鉄道", 18.0)).toBe(610);
+    });
+  });
+
+  describe("福岡市地下鉄（区数制・公式サイトに全区分の記載あり）", () => {
+    it("姪浜→福岡空港 13.1km、実運賃340円（4区）", () => {
+      expect(calc.estimate("福岡市交通局", 13.1)).toBe(340);
+    });
+
+    it("天神→姪浜 7.3km、実運賃300円（2区の上限7kmのすぐ外側）", () => {
+      expect(calc.estimate("福岡市交通局", 7.3)).toBe(300);
+    });
+
+    it("7.0km ちょうどは 260円（2区）", () => {
+      expect(calc.estimate("福岡市交通局", 7.0)).toBe(260);
+    });
+
+    // 6区は本来上限なし。表の上限30kmを超えても380円のままになること
+    it("19kmを超えたらどこまで乗っても380円", () => {
+      expect(calc.estimate("福岡市交通局", 20)).toBe(380);
+      expect(calc.estimate("福岡市交通局", 50)).toBe(380);
+    });
+  });
+
+  describe("長野電鉄（令和7年12月1日改定）", () => {
+    // 公式PDFはキロ程の範囲が連結表記(1112=11〜12km)で出てくるため、
+    // 帯が1kmから連続する性質を使って切り直した
+    it("長野→湯田中 33.1km（全線）、実運賃1,660円", () => {
+      expect(calc.estimate("長野電鉄", 33.1)).toBe(1660);
+    });
+
+    it("須坂→長野 12.5km、実運賃680円", () => {
+      expect(calc.estimate("長野電鉄", 12.5)).toBe(680);
+    });
+
+    it("12.0km ちょうどは 600円（12.5km=680円 の1つ下の帯）", () => {
+      expect(calc.estimate("長野電鉄", 12.0)).toBe(600);
+    });
+  });
+
+  describe("万葉線（公式運賃表の全300ペアから復元）", () => {
+    it("高岡駅→越ノ潟 12.9km（全線）は 400円", () => {
+      expect(calc.estimate("万葉線", 12.9)).toBe(400);
+    });
+
+    it("高岡駅→市民病院前 2.4km は 250円", () => {
+      expect(calc.estimate("万葉線", 2.4)).toBe(250);
+    });
+
+    it("2.0km ちょうどは 200円（2.4km=250円 の1つ下の帯）", () => {
+      expect(calc.estimate("万葉線", 2.0)).toBe(200);
+    });
+
+    // 同じ2.1kmでも高岡駅発だけ1段安い。距離表では表現できないので override で補正する
+    it("坂下町→江尻 2.1km は距離表どおり 250円", () => {
+      expect(calc.estimate("万葉線", 2.1, "坂下町", "江尻")).toBe(250);
+    });
+
+    it("高岡駅→志貴野中学校前 2.1km は override で 200円", () => {
+      expect(calc.estimate("万葉線", 2.1, "高岡駅", "志貴野中学校前")).toBe(
+        200,
+      );
+    });
+
+    it("高岡駅→新能町 4.1km は override で 250円", () => {
+      expect(calc.estimate("万葉線", 4.1, "高岡駅", "新能町")).toBe(250);
+    });
+
+    it("中伏木→東新湊 4.1km は override が効かず 300円", () => {
+      expect(calc.estimate("万葉線", 4.1, "中伏木", "東新湊")).toBe(300);
+    });
+  });
+
+  describe("北陸鉄道（公式運賃表の全202ペアから復元）", () => {
+    it("野町→鶴来 13.8km（石川線全線）は 540円", () => {
+      expect(calc.estimate("北陸鉄道", 13.8, "野町", "鶴来")).toBe(540);
+    });
+
+    it("押野→鶴来 10.4km は 540円", () => {
+      expect(calc.estimate("北陸鉄道", 10.4, "押野", "鶴来")).toBe(540);
+    });
+
+    it("10.0km ちょうどは 490円（10.4km=540円 の1つ下の帯）", () => {
+      expect(calc.estimate("北陸鉄道", 10.0)).toBe(490);
+    });
+
+    it("馬替→押野 2.1km は距離表どおり 290円", () => {
+      expect(calc.estimate("北陸鉄道", 2.1, "馬替", "押野")).toBe(290);
+    });
+
+    // 金沢側ターミナル寄りの駅発だけ同距離の他区間より安い
+    it("野町→新西金沢 2.1km は override で 210円", () => {
+      expect(calc.estimate("北陸鉄道", 2.1, "野町", "新西金沢")).toBe(210);
+    });
+
+    it("北鉄金沢→内灘 6.8km（浅野川線全線）は override で 400円", () => {
+      expect(calc.estimate("北陸鉄道", 6.8, "北鉄金沢", "内灘")).toBe(400);
+    });
+
+    it("乙丸→鶴来 7.0km は距離表どおり 440円", () => {
+      expect(calc.estimate("北陸鉄道", 7.0, "乙丸", "鶴来")).toBe(440);
+    });
+  });
+
+  describe("富山地方鉄道(軌道線)", () => {
+    // 市内線・富山都心線・富山港線は全線均一。鉄道線とは別体系なので
+    // data/operator-splits.json で事業者を分けている
+    it("均一運賃なのでどの距離でも 240円", () => {
+      expect(calc.estimate("富山地方鉄道(軌道線)", 1.0)).toBe(240);
+      expect(calc.estimate("富山地方鉄道(軌道線)", 7.6)).toBe(240);
+    });
+  });
+
+  describe("富山地方鉄道（鉄道線67駅の全2211ペアをoverrideで登録）", () => {
+    it("電鉄富山→宇奈月温泉（全線53.3km）は 2,160円", () => {
+      expect(
+        calc.estimate("富山地方鉄道", 53.3, "電鉄富山", "宇奈月温泉"),
+      ).toBe(2160);
+    });
+
+    // 同じ営業キロでも区間によって運賃が違う。距離表では表せないので全ペアを持つ
+    it("電鉄富山→新相ノ木 12.1km は 700円", () => {
+      expect(calc.estimate("富山地方鉄道", 12.1, "電鉄富山", "新相ノ木")).toBe(
+        700,
+      );
+    });
+
+    it("越中舟橋→中滑川 も 12.1km だが 720円", () => {
+      expect(calc.estimate("富山地方鉄道", 12.1, "越中舟橋", "中滑川")).toBe(
+        720,
+      );
+    });
+
+    it("寺田→越中泉 0.7km は初乗りの 240円", () => {
+      expect(calc.estimate("富山地方鉄道", 0.7, "寺田", "越中泉")).toBe(240);
+    });
+
+    // 距離表は「各距離での最小運賃」の階段。枝刈りの下界に使うので実運賃を超えてはいけない
+    // 枝刈りの下界としての正しさ。graph を再生成して駅間距離が動くと帯の境界を
+    // またいで壊れうる（境界の余裕は最小6m）ので、実距離で全ペアを検査する
+    it("距離表は全2211ペアの実運賃を上回らない（graph.json の実距離で検証）", () => {
+      const km = graphKmOf("富山地方鉄道");
+      expect(chitetsuOverride.pairs).toHaveLength(2211);
+      let checked = 0;
+      for (const p of chitetsuOverride.pairs) {
+        const d = km.get([p.from, p.to].sort().join("\u0000"));
+        expect(
+          d,
+          `${p.from}-${p.to} の距離が graph.json から取れない`,
+        ).toBeDefined();
+        expect(
+          calc.estimate("富山地方鉄道", d!),
+          `${p.from}→${p.to} ${d!.toFixed(3)}km`,
+        ).toBeLessThanOrEqual(p.fare);
+        checked++;
+      }
+      expect(checked).toBe(2211);
+    });
+
+    // override が丸ごと消えても距離表が同じ値を返すペアが多く、代表値のテストでは
+    // 欠落を検出できない。件数と、距離表と食い違う値が実際に引けることの両方を見る
+    it("override は全2211ペア揃っていて、距離表と違う値が引ける", () => {
+      const km = graphKmOf("富山地方鉄道");
+      const differing = chitetsuOverride.pairs.filter((p) => {
+        const d = km.get([p.from, p.to].sort().join("\u0000"));
+        return d !== undefined && calc.estimate("富山地方鉄道", d) !== p.fare;
+      });
+      expect(differing.length).toBeGreaterThan(100);
+      for (const p of differing.slice(0, 50)) {
+        expect(
+          calc.estimate("富山地方鉄道", 0.1, p.from, p.to),
+          `${p.from}→${p.to}`,
+        ).toBe(p.fare);
+      }
+    });
+  });
+
+  describe("えちぜん鉄道（公式運賃表の全946ペアから復元）", () => {
+    it("福井→勝山 27.8km（勝山永平寺線全線）は 820円", () => {
+      expect(calc.estimate("えちぜん鉄道", 27.8, "福井", "勝山")).toBe(820);
+    });
+
+    it("勝山→三国港 51.5km（両線をまたぐ最長区間）は 1,070円", () => {
+      expect(calc.estimate("えちぜん鉄道", 51.5, "勝山", "三国港")).toBe(1070);
+    });
+
+    it("福井→永平寺口 10.9km は 490円", () => {
+      expect(calc.estimate("えちぜん鉄道", 10.9, "福井", "永平寺口")).toBe(490);
+    });
+
+    it("12.0km ちょうどは 490円、12.1km は次の帯の 560円", () => {
+      expect(calc.estimate("えちぜん鉄道", 12.0)).toBe(490);
+      expect(calc.estimate("えちぜん鉄道", 12.1)).toBe(560);
+    });
+
+    // 6.4km以下には同じ距離でも1段安い区間がある。距離表では表せないので override で持つ
+    it("福井口→田原町 2.1km は override で 180円", () => {
+      expect(calc.estimate("えちぜん鉄道", 2.1, "福井口", "田原町")).toBe(180);
+    });
+
+    it("override のない 2.1km は距離表どおり 240円", () => {
+      expect(calc.estimate("えちぜん鉄道", 2.1)).toBe(240);
+    });
+  });
+
+  describe("えちごトキめき鉄道（2025年10月1日改定）", () => {
+    it("妙高高原→直江津 37.7km（妙高はねうまライン全線）は 1,070円", () => {
+      expect(calc.estimate("えちごトキめき鉄道", 37.7)).toBe(1070);
+    });
+
+    it("直江津→市振 59.3km（日本海ひすいライン全線）は 1,540円", () => {
+      expect(calc.estimate("えちごトキめき鉄道", 59.3)).toBe(1540);
+    });
+
+    it("20.0km ちょうどは 510円、20.1km は次の帯の 650円", () => {
+      expect(calc.estimate("えちごトキめき鉄道", 20.0)).toBe(510);
+      expect(calc.estimate("えちごトキめき鉄道", 20.1)).toBe(650);
+    });
+
+    // 公表されている営業キロが丸められているため、差が境界をまたぐか判定できない区間がある
+    it("市振→糸魚川 は公表キロ差20.0kmだが実額の 650円", () => {
+      expect(calc.estimate("えちごトキめき鉄道", 20.0, "市振", "糸魚川")).toBe(
+        650,
+      );
+    });
+  });
+
+  describe("しなの鉄道（2026年3月14日改定）", () => {
+    it("軽井沢→篠ノ井 65.1km（しなの鉄道線全線）は 1,470円", () => {
+      expect(calc.estimate("しなの鉄道", 65.1, "軽井沢", "篠ノ井")).toBe(1470);
+    });
+
+    it("上田→小諸 18.0km は 410円", () => {
+      expect(calc.estimate("しなの鉄道", 18.0, "上田", "小諸")).toBe(410);
+    });
+
+    // 探索は confirmedFare + lowerBound で枝を刈るので、lowerBound が実運賃を
+    // 上回ると予算内の経路を取りこぼす。ここで守るのはその不変条件。
+    //
+    // lowerBound は override の駅別最小額と min を取るため、距離表が実額を
+    // 上回っていても隠れてしまう。ここで見るのは距離表そのもの。
+    // 表は scripts/fare/derive-lower-bound.ts が実額行列と graph.json の距離から
+    // 作っており、この不変条件が表の生成規則そのものになっている。
+    it("距離表は全435ペアの実運賃を上回らない（graph.json の実距離で検証）", () => {
+      const km = graphKmOf("しなの鉄道");
+      expect(shinanoOverride.pairs).toHaveLength(435);
+      for (const p of shinanoOverride.pairs) {
+        const d = km.get([p.from, p.to].sort().join("\u0000"));
+        expect(
+          d,
+          `${p.from}-${p.to} の距離が graph.json から取れない`,
+        ).toBeDefined();
+        expect(
+          calc.estimate("しなの鉄道", d!),
+          `${p.from}→${p.to} ${d!.toFixed(3)}km`,
+        ).toBeLessThanOrEqual(p.fare);
+      }
+    });
+
+    // 1つの事業者名の中に賃率の違う3つの体系が同居する。同じ距離でも値が違うので
+    // 距離表では表せず、全ペアを override で持っている
+    it("同じ5.0km前後でも、線によって運賃が違う", () => {
+      // 篠ノ井〜長野はJRの線路で、運賃もJR賃率との連絡運賃
+      expect(calc.estimate("しなの鉄道", 5.0, "長野", "川中島")).toBe(200);
+      // しなの鉄道線内
+      expect(calc.estimate("しなの鉄道", 4.7, "軽井沢", "中軽井沢")).toBe(240);
+      // 北しなの線
+      expect(calc.estimate("しなの鉄道", 3.9, "長野", "北長野")).toBe(240);
+    });
+
+    // 北しなの線はしなの鉄道線と賃率が違うので、こちらも override で実額を持つ
+    it("長野→牟礼 19.1km は北しなの線の 430円（しなの鉄道線の距離表なら460円）", () => {
+      expect(calc.estimate("しなの鉄道", 19.1, "長野", "牟礼")).toBe(430);
+      expect(calc.estimate("しなの鉄道", 19.1)).toBe(460);
+    });
+
+    it("長野→妙高高原 37.3km（北しなの線全線）は 850円", () => {
+      expect(calc.estimate("しなの鉄道", 37.3, "長野", "妙高高原")).toBe(850);
+    });
+
+    it("軽井沢→妙高高原 は両線をまたいで 2,490円", () => {
+      expect(calc.estimate("しなの鉄道", 102.4, "軽井沢", "妙高高原")).toBe(
+        2490,
+      );
+    });
+  });
+
+  // lib/search/reachable.ts の枝刈りは「override が効かない区間では距離表の運賃が
+  // km について単調非減少」であることを下界の根拠にしている。運賃表に逆転があると
+  // この前提が崩れ、正しい経路を誤って刈る可能性がある。山陽電鉄の転記時に実際に
+  // 逆転した値を取り込みかけたため、全表を機械的に検査する。
+  // 運賃表・特定運賃と data/graph.json の結合はすべて手打ちの日本語（事業者名・駅名）で、
+  // 1文字でも違うと calculator は黙って汎用フォールバック表に落ちる。zod もファイル読み込み
+  // 漏れ検出テストもこの食い違いは見ないので、ここで実データと突き合わせる。
+  describe("運賃データと graph.json の整合", () => {
+    const graph = JSON.parse(
+      readFileSync("data/graph.json", "utf8"),
+    ) as RailGraph;
+    const nodes = Object.values(graph.nodes);
+    const operators = new Set(nodes.map((n) => n.operator));
+    const stationsByOperator = new Map<string, Set<string>>();
+    for (const n of nodes) {
+      let s = stationsByOperator.get(n.operator);
+      if (!s) stationsByOperator.set(n.operator, (s = new Set()));
+      s.add(n.name);
+    }
+
+    it("運賃表が宣言する事業者名はすべて graph.json に実在する", () => {
+      const missing = rules
+        .flatMap((r) => r.operators)
+        .filter((op) => !op.startsWith("__") && !operators.has(op));
+      expect(missing).toEqual([]);
+    });
+
+    it("特定運賃の事業者名と駅名はすべて graph.json に実在する", () => {
+      const missing: string[] = [];
+      for (const o of overrides) {
+        const stations = stationsByOperator.get(o.operator);
+        if (!stations) {
+          missing.push(`事業者 ${o.operator}`);
+          continue;
+        }
+        for (const p of o.pairs) {
+          if (!stations.has(p.from)) missing.push(`${o.operator}/${p.from}`);
+          if (!stations.has(p.to)) missing.push(`${o.operator}/${p.to}`);
+        }
+      }
+      expect([...new Set(missing)]).toEqual([]);
+    });
+
+    it("同じ事業者を宣言する運賃表が2つ以上ない（後勝ちで静かに上書きされる）", () => {
+      const seen = new Map<string, string[]>();
+      for (const r of rules)
+        for (const op of r.operators) {
+          let l = seen.get(op);
+          if (!l) seen.set(op, (l = []));
+          l.push(r.id);
+        }
+      expect([...seen].filter(([, ids]) => ids.length > 1)).toEqual([]);
+    });
+
+    it("特定運賃に同じ駅ペアの重複がない（後勝ちで静かに上書きされる）", () => {
+      const dup: string[] = [];
+      for (const o of overrides) {
+        const seen = new Set<string>();
+        for (const p of o.pairs) {
+          const key = [p.from, p.to].sort().join("\u0000");
+          if (seen.has(key)) dup.push(`${o.operator}: ${p.from}-${p.to}`);
+          seen.add(key);
+          if (p.from === p.to) dup.push(`${o.operator}: 同一駅 ${p.from}`);
+        }
+      }
+      expect(dup).toEqual([]);
+    });
+  });
+
+  describe("全運賃表の不変条件", () => {
+    // beyond は table の範囲外で使われる線形外挿。最終帯より安くなると km について
+    // 単調でなくなり、枝刈りの下界の前提が壊れる。
+    it("beyond は最終帯から接続していて、そこで運賃が下がらない", () => {
+      for (const r of rules) {
+        const last = r.table[r.table.length - 1];
+        if (last === undefined) continue;
+        expect(r.beyond.fromKm, `${r.id} の beyond.fromKm`).toBe(last[0]);
+        expect(
+          r.beyond.baseFare,
+          `${r.id} の beyond.baseFare`,
+        ).toBeGreaterThanOrEqual(last[1]);
+        expect(
+          r.beyond.ratePerKm,
+          `${r.id} の ratePerKm`,
+        ).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it("運賃は距離について単調非減少（逆転が無い）", () => {
+      const inversions: string[] = [];
+      for (const rule of rules) {
+        for (let i = 1; i < rule.table.length; i++) {
+          const prev = rule.table[i - 1];
+          const cur = rule.table[i];
+          if (prev === undefined || cur === undefined) continue;
+          if (cur[1] < prev[1]) {
+            inversions.push(
+              `${rule.id}: ${prev[0]}km=${prev[1]}円 → ${cur[0]}km=${cur[1]}円`,
+            );
+          }
+        }
+      }
+      expect(inversions).toEqual([]);
+    });
+  });
+
+  describe("東急世田谷線・こどもの国線（均一運賃、駅ペアoverride）", () => {
+    // 出典: https://setagaya-line.com/2023/03/18/ (世田谷線160円均一)
+    //       https://ja.wikipedia.org/wiki/東急こどもの国線 (こどもの国線 IC157円/きっぷ160円。
+    //       本プロジェクトは全事業者きっぷ運賃で統一のため160円を採用)
+    // 本線用の対キロ制表(tokyu.json)ではなくoverrideが適用されることを確認
+    it("三軒茶屋→下高井戸(世田谷線全線)は均一160円", () => {
+      expect(calc.estimate("東急電鉄", 5.0, "三軒茶屋", "下高井戸")).toBe(160);
+    });
+
+    it("世田谷線内の隣接駅(松陰神社前→世田谷)も同じ160円均一", () => {
+      expect(calc.estimate("東急電鉄", 0.6, "松陰神社前", "世田谷")).toBe(160);
+    });
+
+    it("長津田→こどもの国(こどもの国線全線)は均一160円（きっぷ。IC157円とは別）", () => {
+      expect(calc.estimate("東急電鉄", 3.4, "長津田", "こどもの国")).toBe(160);
+    });
+
+    it("override対象外の駅ペアは本線の対キロ制表を引く", () => {
+      expect(calc.estimate("東急電鉄", 24.2, "渋谷", "横浜")).toBe(310);
+    });
+  });
+
+  describe("tableFare の二分探索境界（table が maxKm 昇順である前提の検証）", () => {
+    // c795886 で線形走査から二分探索に変わった。二分探索は「km <= maxKm を
+    // 満たす最初の行」を探すが、線形走査と一致するのは table が maxKm の
+    // 昇順であるときだけ。ここでは境界値を総当たりして両者が一致することを固定する。
+    const table: [number, number][] = [
+      [3, 100],
+      [10, 200],
+      [30, 300],
+    ];
+    const calcTable = createFareCalculator([
+      {
+        id: "test-boundary",
+        operators: [],
+        table,
+        beyond: { fromKm: 30, baseFare: 300, ratePerKm: 10 },
+      },
+    ]);
+
+    it("最初の行の maxKm ちょうど", () => {
+      expect(calcTable.estimate("X", 3)).toBe(100);
+    });
+
+    it("行間の値（2行目に落ちる）", () => {
+      expect(calcTable.estimate("X", 5)).toBe(200);
+    });
+
+    it("最終行の maxKm ちょうど", () => {
+      expect(calcTable.estimate("X", 30)).toBe(300);
+    });
+
+    it("最終行を超過すると beyond 外挿に落ちる", () => {
+      expect(calcTable.estimate("X", 31)).toBe(
+        Math.ceil((300 + 1 * 10) / 10) * 10,
+      );
+    });
+
+    it("1行だけのテーブル", () => {
+      const single = createFareCalculator([
+        {
+          id: "test-single",
+          operators: [],
+          table: [[10, 999]],
+          beyond: { fromKm: 10, baseFare: 999, ratePerKm: 5 },
+        },
+      ]);
+      expect(single.estimate("X", 5)).toBe(999);
+      expect(single.estimate("X", 10)).toBe(999);
+      expect(single.estimate("X", 11)).toBe(Math.ceil((999 + 1 * 5) / 10) * 10);
+    });
+
+    it("空テーブルは常に beyond 外挿に落ちる", () => {
+      const empty = createFareCalculator([
+        {
+          id: "test-empty",
+          operators: [],
+          table: [],
+          beyond: { fromKm: 0, baseFare: 150, ratePerKm: 20 },
+        },
+      ]);
+      expect(empty.estimate("X", 1)).toBe(Math.ceil((150 + 1 * 20) / 10) * 10);
+      expect(empty.estimate("X", 100)).toBe(
+        Math.ceil((150 + 100 * 20) / 10) * 10,
+      );
+    });
+  });
+
+  describe("fareRuleSchema: table が maxKm 昇順であることの検証", () => {
+    // 二分探索（tableFare）は table が maxKm の厳密な昇順であることに依存する。
+    // 順序が崩れたデータはパース時点で確実に弾かれる必要がある。
+    const baseBeyond = { fromKm: 30, baseFare: 300, ratePerKm: 10 };
+
+    it("maxKm が降順を含むデータは parse で例外になる", () => {
+      expect(() =>
+        fareRuleSchema.parse({
+          id: "broken-desc",
+          operators: [],
+          table: [
+            [10, 200],
+            [3, 100],
+            [30, 300],
+          ],
+          beyond: baseBeyond,
+        }),
+      ).toThrow();
+    });
+
+    it("maxKm が同値（重複）のデータも parse で例外になる（二分探索の一意性が崩れるため）", () => {
+      expect(() =>
+        fareRuleSchema.parse({
+          id: "broken-dup",
+          operators: [],
+          table: [
+            [3, 100],
+            [10, 200],
+            [10, 250],
+          ],
+          beyond: baseBeyond,
+        }),
+      ).toThrow();
+    });
+
+    it("エラーメッセージにルール id と違反位置(index)が含まれる", () => {
+      try {
+        fareRuleSchema.parse({
+          id: "broken-with-id",
+          operators: [],
+          table: [
+            [10, 200],
+            [3, 100],
+          ],
+          beyond: baseBeyond,
+        });
+        throw new Error("should have thrown");
+      } catch (e) {
+        const message = String(e);
+        expect(message).toContain("broken-with-id");
+        expect(message).toContain("table[0]");
+        expect(message).toContain("table[1]");
+      }
+    });
+
+    it("正しく昇順のデータは parse を通る", () => {
+      expect(() =>
+        fareRuleSchema.parse({
+          id: "ok",
+          operators: [],
+          table: [
+            [3, 100],
+            [10, 200],
+            [30, 300],
+          ],
+          beyond: baseBeyond,
+        }),
+      ).not.toThrow();
+    });
+  });
+
+  describe("lowerBound（探索の枝刈り用下界。締めすぎ・緩めすぎのどちらも危険）", () => {
+    const lbTable: [number, number][] = [
+      [5, 100],
+      [10, 200],
+      [20, 400],
+    ];
+    const calcLb = createFareCalculator(
+      [
+        {
+          id: "test-lb",
+          operators: [],
+          table: lbTable,
+          beyond: { fromKm: 20, baseFare: 400, ratePerKm: 20 },
+        },
+      ],
+      [
+        {
+          operator: "OpLB",
+          pairs: [
+            { from: "Anchor1", to: "Anchor2", fare: 90 },
+            { from: "Anchor2", to: "Anchor3", fare: 50 },
+          ],
+          source: { url: "", fetchedAt: "2026-08-29", note: "test" },
+        },
+      ],
+    );
+
+    it("override 非対象の起点（override ペアに一切登場しない駅）は tableFare(km) と一致する", () => {
+      for (const km of [0, 3, 5, 6, 10, 15, 20, 25]) {
+        expect(calcLb.lowerBound("OpLB", km, "非対象駅")).toBe(
+          calcLb.estimate("OpLB", km),
+        );
+      }
+    });
+
+    it("fromName を省略した場合も tableFare と事業者全体の override 最小値の小さいほう", () => {
+      // 事業者全体の override 最小値は 50（Anchor2-Anchor3）
+      expect(calcLb.lowerBound("OpLB", 20)).toBe(
+        Math.min(calcLb.estimate("OpLB", 20), 50),
+      );
+      expect(calcLb.lowerBound("OpLB", 3)).toBe(
+        Math.min(calcLb.estimate("OpLB", 3), 50),
+      );
+    });
+
+    it("override ペアに from 側として登場する起点は、その駅を含むペアの最小運賃と tableFare の小さいほうになる", () => {
+      // Anchor1 は (Anchor1,Anchor2)=90 のみに登場 => 駅単位の最小値は 90
+      const km = 20; // tableFare=400
+      expect(calcLb.lowerBound("OpLB", km, "Anchor1")).toBe(
+        Math.min(calcLb.estimate("OpLB", km), 90),
+      );
+      expect(calcLb.lowerBound("OpLB", km, "Anchor1")).toBeLessThanOrEqual(
+        calcLb.estimate("OpLB", km),
+      );
+    });
+
+    it("override ペアの to 側にだけ登場する起点でも同様に締まる（pairKey の対称性に依存）", () => {
+      // Anchor3 は (Anchor2,Anchor3)=50 の to 側にしか登場しない。
+      // ここが崩れると本来到達できる駅を誤って刈ってしまう。
+      const km = 20;
+      expect(calcLb.lowerBound("OpLB", km, "Anchor3")).toBe(
+        Math.min(calcLb.estimate("OpLB", km), 50),
+      );
+    });
+
+    it("駅単位の下界は事業者全体の override 最小値以上（締まっている）", () => {
+      for (const station of ["Anchor1", "Anchor2", "Anchor3"]) {
+        for (const km of [0, 5, 10, 20, 30]) {
+          const stationBound = calcLb.lowerBound("OpLB", km, station);
+          const operatorBound = calcLb.lowerBound("OpLB", km);
+          expect(stationBound).toBeGreaterThanOrEqual(operatorBound);
+        }
+      }
+    });
+
+    it("下界性: km' >= km ならどの終点名についても lowerBound(km) <= estimate(km', 終点名)", () => {
+      const kms = [0, 1, 3, 5, 6, 10, 12, 20, 25, 40];
+      const froms = [undefined, "非対象駅", "Anchor1", "Anchor2", "Anchor3"];
+      const tos = [
+        undefined,
+        "非対象駅",
+        "Anchor1",
+        "Anchor2",
+        "Anchor3",
+        "他の駅",
+      ];
+      for (const from of froms) {
+        for (const km of kms) {
+          const lb = calcLb.lowerBound("OpLB", km, from);
+          for (const kmPrime of kms) {
+            if (kmPrime < km) continue;
+            for (const to of tos) {
+              const est = calcLb.estimate("OpLB", kmPrime, from, to);
+              expect(lb).toBeLessThanOrEqual(est);
+            }
+          }
+        }
+      }
+    });
+  });
+
+  describe("isOverrideAnchor（探索側が区間の起点駅を区別すべきか判定するための API）", () => {
+    // 探索側 (lib/search/reachable.ts) は、区間の起点駅の名前がその事業者の
+    // override 駅ペアのどちらにも登場しない場合、この区間は将来どの駅で降りても
+    // override を引けないと判断して状態をマージする（状態爆発を防ぐ最適化）。
+    // その安全性は「from と to の両方が anchor と判定される」ことに依存するため、
+    // 逆向き探索（B→A）でも override を引けることを確認する必要がある。
+    const calcAnchor = createFareCalculator(
+      [
+        {
+          id: "test",
+          operators: [],
+          table: [[10, 200]],
+          beyond: { fromKm: 10, baseFare: 200, ratePerKm: 20 },
+        },
+      ],
+      [
+        {
+          operator: "OpA",
+          pairs: [{ from: "A", to: "B", fare: 150 }],
+          source: { url: "", fetchedAt: "2026-08-29", note: "test" },
+        },
+        {
+          operator: "OpA",
+          pairs: [{ from: "C", to: "D", fare: 90 }],
+          source: { url: "", fetchedAt: "2026-08-29", note: "test" },
+        },
+      ],
+    );
+
+    it("(a) override ペアの from・to のどちらも anchor と判定される", () => {
+      expect(calcAnchor.isOverrideAnchor("OpA", "A")).toBe(true);
+      expect(calcAnchor.isOverrideAnchor("OpA", "B")).toBe(true);
+    });
+
+    it("(b) override 未登録の事業者・駅名では false", () => {
+      expect(calcAnchor.isOverrideAnchor("OpA", "存在しない駅")).toBe(false);
+      expect(calcAnchor.isOverrideAnchor("未登録事業者", "A")).toBe(false);
+    });
+
+    it("(c) stationName が undefined なら false", () => {
+      expect(calcAnchor.isOverrideAnchor("OpA", undefined)).toBe(false);
+    });
+
+    it("(d) 同一事業者に複数の override エントリがあるとき駅集合がマージされる", () => {
+      // "C","D" は2つ目の override エントリ（別の pairs 配列）に属する。
+      // マージされていなければここが false になってしまう。
+      expect(calcAnchor.isOverrideAnchor("OpA", "C")).toBe(true);
+      expect(calcAnchor.isOverrideAnchor("OpA", "D")).toBe(true);
+    });
+  });
+
+  // JR本州3社（東日本・東海・西日本）をまたぐ通し運賃 = 基準額（総営業キロで
+  // 基準額表を1回引いた額）+ 加算額（eastKmに対して加算額表を1回引いた額）。
+  // 基準額表は data/fare-rules/jr-central.json（JR東海、据え置きの幹線表）を
+  // 代表として使う。「100km超は加算額0円」は出典にない誤りだったため廃止した
+  // （加算額表には541km以上の帯まで存在する。詳細は
+  // .superpowers/sdd/2026-08-24-fare-accuracy/kasan-verified.md 参照）。
+  describe("estimateHonshuThrough / honshuThroughBaseFare（JR本州3社をまたぐ通し運賃）", () => {
+    it("総距離100km以下: 基準額＋加算額（jr-central.json・jr-honshu-kasan.json の実データで検証）", () => {
+      // 90km = jr-central.json の [90, 1520] 帯。加算額表 [30, 20] は26〜30km帯=20円。
+      expect(calc.estimateHonshuThrough(90, 30)).toBe(1520 + 20);
+      // ちょうど100km: 基準額 [100, 1690] + 加算額 [100, 100]（91〜100km帯）
+      expect(calc.estimateHonshuThrough(100, 100)).toBe(1690 + 100);
+    });
+
+    it("総距離100km超でも加算額は0円にならない（長野→名古屋相当、公式4,580円）", () => {
+      // 長野→名古屋相当: 基準額4,510円(241〜260km帯) + 加算額70円(71〜80km帯) = 4,580円。
+      // 修正前の実装は totalKm>100 で加算額を強制的に0円にしていたため 4,510円になっていた。
+      expect(calc.estimateHonshuThrough(250.8, 76.9)).toBe(4580);
+    });
+
+    it("東京→豊橋相当（281〜300km帯、実運賃5,170円）: eastKmが0ならJR東日本分の加算はない", () => {
+      // 東京都区内発の東海道方面は東京〜熱海間を新幹線(JR東海)経由として計算するため
+      // eastKmが0になる（探索側 lib/search/reachable.ts の責務）。ここでは
+      // calculator自体は「eastKm=0を渡されれば加算額表の該当帯(0円)を引くだけ」であることを確認する。
+      expect(calc.estimateHonshuThrough(293.6, 0)).toBe(5170);
+    });
+
+    it("東京→名古屋相当（361〜380km帯、実運賃6,380円）: eastKm=0なら基準額のみ", () => {
+      expect(calc.estimateHonshuThrough(370, 0)).toBe(6380);
+    });
+
+    it("東京→大阪相当（541〜560km帯、実運賃8,910円）: eastKm=0なら基準額のみ", () => {
+      expect(calc.estimateHonshuThrough(556.4, 0)).toBe(8910);
+    });
+
+    it("eastKmが渡されると加算額表の該当帯が乗る（101〜120km帯=110円）", () => {
+      // 104.6km は101〜120km帯なので加算額110円。
+      expect(calc.estimateHonshuThrough(556.4, 104.6)).toBe(8910 + 110);
+    });
+
+    it("eastKmが541km以上でも加算額は440円固定（beyond）", () => {
+      expect(calc.estimateHonshuThrough(3400, 541)).toBe(
+        calc.honshuThroughBaseFare(3400) + 440,
+      );
+      expect(calc.estimateHonshuThrough(3400, 1000)).toBe(
+        calc.honshuThroughBaseFare(3400) + 440,
+      );
+    });
+
+    it("km<=0 は0円", () => {
+      expect(calc.estimateHonshuThrough(0, 0)).toBe(0);
+      expect(calc.estimateHonshuThrough(-1, 0)).toBe(0);
+    });
+
+    it("honshuThroughBaseFare は加算額抜きの基準額のみ（枝刈り用の下界）", () => {
+      expect(calc.honshuThroughBaseFare(90)).toBe(1520);
+      expect(calc.honshuThroughBaseFare(293.6)).toBe(5170);
+      expect(calc.honshuThroughBaseFare(0)).toBe(0);
+    });
+
+    // コントローラが確定した加算額表（kasan-verified.md）の算術検証を固定する。
+    // 公式定義「加算額＝改定後のJR東日本運賃－基準額」に従い、
+    // jr-east.json（改定後JR東日本）とjr-central.json（基準額）の差額を
+    // 100km以下の16帯すべてで計算し、jr-honshu-kasan.jsonの値と一致することを確認する。
+    // ここが崩れると「81-90km=100円/91-100km=110円」のような前回の誤転記が再発する。
+    it("加算額表(100kmまでの16帯)がjr-east.json - jr-central.jsonの差額と一致する（算術検証）", () => {
+      const cases: { km: number; east: number; base: number }[] = [
+        { km: 3, east: 160, base: 150 },
+        { km: 6, east: 200, base: 190 },
+        { km: 10, east: 210, base: 200 },
+        { km: 15, east: 260, base: 240 },
+        { km: 20, east: 350, base: 330 },
+        { km: 25, east: 440, base: 420 },
+        { km: 30, east: 530, base: 510 },
+        { km: 35, east: 620, base: 590 },
+        { km: 40, east: 720, base: 680 },
+        { km: 45, east: 810, base: 770 },
+        { km: 50, east: 910, base: 860 },
+        { km: 60, east: 1040, base: 990 },
+        { km: 70, east: 1230, base: 1170 },
+        { km: 80, east: 1410, base: 1340 },
+        { km: 90, east: 1600, base: 1520 },
+        { km: 100, east: 1790, base: 1690 },
+      ];
+      for (const { km, east, base } of cases) {
+        expect(calc.estimate("JR東日本", km)).toBe(east);
+        expect(calc.estimate("JR東海", km)).toBe(base);
+        const kasan = east - base;
+        // eastKm=km・totalKm=kmとして通し運賃を引くと base+kasanになるはず
+        // （同じ距離帯であることを前提とした単純化: 通し運賃自体は
+        // totalKmとeastKmを別々に引く点に注意。ここではkasan額そのものの
+        // 一致だけを検証するため、加算額表を直接引けるkmでestimateHonshuThroughを呼ぶ）。
+        expect(
+          calc.estimateHonshuThrough(km, km) - calc.honshuThroughBaseFare(km),
+        ).toBe(kasan);
+      }
+    });
+
+    it("基準額表(JR東海)・加算額表が未登録の calculator で呼ぶとエラーになる（サイレントな誤運賃を防ぐ）", () => {
+      const bare = createFareCalculator([
+        {
+          id: "fallback",
+          operators: [],
+          table: [[10, 100]],
+          beyond: { fromKm: 10, baseFare: 100, ratePerKm: 10 },
+        },
+      ]);
+      expect(() => bare.estimateHonshuThrough(50, 10)).toThrow();
+      expect(() => bare.honshuThroughBaseFare(50)).toThrow();
+    });
+  });
+});
+
+describe("地方交通線の表 (localTable)", () => {
+  const calcL = createFareCalculator([
+    {
+      id: "fallback",
+      operators: [],
+      table: [[100, 999]],
+      beyond: { fromKm: 100, baseFare: 999, ratePerKm: 0 },
+    },
+    {
+      id: "opj",
+      operators: ["OpJ"],
+      table: [
+        [10, 100],
+        [20, 200],
+      ],
+      localTable: [
+        [10, 110],
+        [15, 150],
+      ],
+      beyond: { fromKm: 20, baseFare: 200, ratePerKm: 10 },
+    },
+  ]);
+
+  it("営業キロ（localKm）を渡すと地方交通線の表で引く", () => {
+    expect(calcL.estimate("OpJ", 16.5, "A", "B", 15)).toBe(150);
+  });
+
+  it("地方交通線の表の範囲を超えたら運賃計算キロで幹線の表を引く", () => {
+    // 公式の地方交通線の表は途中の距離までしか無い（本州の基準額は200kmまで）
+    expect(calcL.estimate("OpJ", 17.6, "A", "B", 16)).toBe(200);
+  });
+
+  it("localKm を渡さなければ幹線の表", () => {
+    expect(calcL.estimate("OpJ", 16.5, "A", "B")).toBe(200);
+  });
+
+  it("地方交通線の表を持たない事業者は localKm を無視する", () => {
+    expect(calcL.estimate("Other", 50, "A", "B", 10)).toBe(999);
+    expect(calcL.hasLocalTable("Other")).toBe(false);
+    expect(calcL.hasLocalTable("OpJ")).toBe(true);
+  });
+
+  it("下界は地方交通線の表を下回らない", () => {
+    // 地方交通線だけのまま進めば150円、幹線に入れば200円以上。下界は安いほう
+    expect(calcL.lowerBound("OpJ", 16.5, undefined, 15)).toBe(150);
+    expect(calcL.lowerBound("OpJ", 16.5)).toBe(200);
+  });
+
+  it("地方交通線の表のほうが高い距離では、下界は幹線の表", () => {
+    // 7〜9kmのように地方交通線の表が高い帯がある。幹線に入れば安くなりうる
+    expect(calcL.lowerBound("OpJ", 9.9, undefined, 9)).toBe(100);
+  });
+});

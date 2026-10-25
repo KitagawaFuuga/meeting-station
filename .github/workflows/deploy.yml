@@ -1,0 +1,111 @@
+name: Deploy to Azure Container Apps
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".claude/**"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set image tag (commit SHA)
+        id: meta
+        run: echo "tag=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # いったんローカルに読み込むだけにして、動作確認が通ってから push する。
+      # イメージが起動しないまま latest が更新されるのを防ぐ。
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: meeting-station:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # コンテナを実際に起動して API を叩く。ここは next start ではなく本番と同じ
+      # standalone サーバー(node server.js)が動く。Dockerfile の COPY 漏れや
+      # 起動時クラッシュは、ビルドが成功しても起動して初めて表面化する
+      # （data/fare-overrides の COPY 漏れで実際に起きた）。
+      - name: Smoke test the image
+        run: |
+          docker run -d --name meeting-station-ci -p 3000:3000 meeting-station:ci
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:3000/api/stations?q=%E6%96%B0%E5%AE%BF" -o /tmp/stations.json; then
+              break
+            fi
+            sleep 2
+          done
+          if ! test -s /tmp/stations.json; then
+            echo "::error::コンテナが応答しませんでした"
+            docker logs meeting-station-ci
+            exit 1
+          fi
+          node -e '
+            const b = require("/tmp/stations.json");
+            if (!Array.isArray(b.stations) || b.stations.length === 0) {
+              console.error("駅が返らなかった:", JSON.stringify(b).slice(0, 300));
+              process.exit(1);
+            }
+            console.log("OK:", b.stations.length, "件");
+          '
+          docker rm -f meeting-station-ci
+
+      - name: Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/meeting-station:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/meeting-station:${{ steps.meta.outputs.tag }}
+          cache-from: type=gha
+
+      - name: Login to Azure
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Update Azure Container App
+        run: |
+          az containerapp update \
+            --name meeting-station \
+            --resource-group meeting-station-rg \
+            --image ${{ secrets.DOCKERHUB_USERNAME }}/meeting-station:${{ steps.meta.outputs.tag }}
