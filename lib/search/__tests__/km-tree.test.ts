@@ -52,6 +52,31 @@ describe("buildKmTree", () => {
     expect(buildKmTree(g, "A").dist.get("C")).toBe(5);
   });
 
+  it("事業者が変わる乗換に罰則を指定すると、少し長くても同じ事業者の経路をたどる", () => {
+    // A-B-C（OpA、計 12km）と、A から OpB に乗り換えて C2（同じ駅の OpA ホームへ戻る）計 10km
+    const g: RailGraph = {
+      nodes: {
+        A: node("A"),
+        B: node("B"),
+        C: node("C"),
+        Ab: { ...node("Ab"), operator: "OpB" },
+        Cb: { ...node("Cb"), operator: "OpB" },
+      },
+      edges: [
+        rail("A", "B", 6),
+        rail("B", "C", 6),
+        { from: "A", to: "Ab", km: 0, kind: "transfer", operator: "" },
+        { from: "Ab", to: "Cb", km: 10, kind: "rail", operator: "OpB" },
+        { from: "Cb", to: "C", km: 0, kind: "transfer", operator: "" },
+      ],
+    };
+    const path = pathEdges(
+      buildKmTree(g, "A", { operatorChangePenalty: 5 }),
+      "C",
+    );
+    expect(path?.map((e) => e.to)).toEqual(["B", "C"]);
+  });
+
   it("つながっていない駅は dist に入らない", () => {
     const g = graphOf(["A", "B", "X"], [rail("A", "B", 1)]);
     expect(buildKmTree(g, "A").dist.has("X")).toBe(false);

@@ -10,12 +10,31 @@ export interface KmTree {
   prev: Map<string, GraphEdge>; // その駅に入った辺。向きは「親 → 子」に揃えたコピー
 }
 
-export function buildKmTree(graph: RailGraph, rootId: string): KmTree {
+export interface KmTreeOptions {
+  // 事業者が変わる乗換（異なる事業者のノードを結ぶ transfer 辺）に足す距離。
+  // 営業キロだけで最短を取ると、関西では JR→Osaka Metro→JR のように細かく乗り継ぎ、
+  // 乗るたびに初乗りがかかって通しの運賃が実態の倍になった（京都→神戸で 1770円、最安 870円）。
+  // 運賃の精査に使う経路だけこれを指定し、dist は罰則込みの値になる
+  operatorChangePenalty?: number;
+}
+
+export function buildKmTree(
+  graph: RailGraph,
+  rootId: string,
+  options: KmTreeOptions = {},
+): KmTree {
+  const penalty = options.operatorChangePenalty ?? 0;
+  const costOf = (e: GraphEdge): number =>
+    e.kind === "transfer" &&
+    graph.nodes[e.from]?.operator !== graph.nodes[e.to]?.operator
+      ? e.km + penalty
+      : e.km;
+
   // グラフの辺は片方向だけ格納されているので、両方向に展開する
-  const adjacency = new Map<string, GraphEdge[]>();
+  const adjacency = new Map<string, { e: GraphEdge; cost: number }[]>();
   const add = (e: GraphEdge) => {
     const arr = adjacency.get(e.from) ?? [];
-    arr.push(e);
+    arr.push({ e, cost: costOf(e) });
     adjacency.set(e.from, arr);
   };
   for (const e of graph.edges) {
@@ -31,8 +50,8 @@ export function buildKmTree(graph: RailGraph, rootId: string): KmTree {
     const cur = heap.pop();
     if (cur === undefined) break;
     if (cur.d > (dist.get(cur.id) ?? Infinity)) continue;
-    for (const e of adjacency.get(cur.id) ?? []) {
-      const d = cur.d + e.km;
+    for (const { e, cost } of adjacency.get(cur.id) ?? []) {
+      const d = cur.d + cost;
       if (d < (dist.get(e.to) ?? Infinity)) {
         dist.set(e.to, d);
         prev.set(e.to, e);
