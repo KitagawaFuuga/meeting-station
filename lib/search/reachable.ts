@@ -21,6 +21,7 @@ export interface ReachableStation {
 // 状態の各項目の意味は lib/search/fare-step.ts の FareState
 interface SearchState extends FareState {
   entry: ParetoEntry; // pop 時の生死判定を O(1) にするための挿入先への参照
+  prev: SearchState | null; // 経路の復元用（findCheapestPath）。参照を持つだけで探索の手間は増えない
 }
 
 // 枝刈り用ラベル。override があるため「今の運賃が安い方」を残すだけでは正しさを
@@ -142,6 +143,8 @@ function runSearch(
   calc: FareCalculator,
   fromId: string,
   budget: number,
+  // 渡されたら、bucket に入った状態をすべて積む（経路の復元用）
+  pushed?: SearchState[],
 ): ParetoStore {
   // 探索が扱う距離は運賃計算キロ（fareKm）。運賃を引くのも枝刈りの次元も距離は
   // ここだけで、外に出すのは運賃だけ（ReachableStation は距離を持たない）なので、
@@ -226,7 +229,9 @@ function runSearch(
   const initial: SearchState = {
     ...initialFareState(fromId),
     entry: initialEntry,
+    prev: null,
   };
+  pushed?.push(initial);
   const heap = new MinHeap<SearchState>((a, b) => a.fare - b.fare);
   heap.push(initial);
 
@@ -241,6 +246,7 @@ function runSearch(
       const next: SearchState = {
         ...advanceFareState(stepCtx, state, edge),
         entry: PENDING_ENTRY,
+        prev: state,
       };
       // next.fare は override により非単調なので、これで刈ると「区間の途中は予算超過
       // だが override で安くなる終点」を取りこぼす。代わりに confirmedFare（経路に
@@ -285,11 +291,45 @@ function runSearch(
       if (inserted) {
         next.entry = nextEntry;
         heap.push(next);
+        pushed?.push(next);
       }
     }
   }
 
   return store;
+}
+
+// fromId から toGroupId に属するいずれかのノードに着く最安の状態の経路。
+// 同じ運賃なら運賃計算キロの短いほう。予算内に無ければ null
+export function findCheapestPath(
+  graph: RailGraph,
+  calc: FareCalculator,
+  fromId: string,
+  toGroupId: string,
+  budget: number,
+): { fare: number; nodeIds: string[] } | null {
+  const pushed: SearchState[] = [];
+  runSearch(graph, calc, fromId, budget, pushed);
+
+  let best: SearchState | undefined;
+  for (const s of pushed) {
+    // 支配されて bucket から外れた状態は、より安いか同じ状態に置き換わっている
+    if (!s.entry.alive || s.fare > budget) continue;
+    if (graph.nodes[s.stationId]?.groupId !== toGroupId) continue;
+    if (
+      !best ||
+      s.fare < best.fare ||
+      (s.fare === best.fare && s.entry.totalKm < best.entry.totalKm)
+    ) {
+      best = s;
+    }
+  }
+  if (!best) return null;
+
+  const nodeIds: string[] = [];
+  for (let s: SearchState | null = best; s; s = s.prev)
+    nodeIds.push(s.stationId);
+  return { fare: best.fare, nodeIds: nodeIds.reverse() };
 }
 
 export function findReachable(
