@@ -15,9 +15,16 @@ export interface Candidate {
   isDestination: boolean;
 }
 
+// A・B それぞれの目的駅までの最安経路（駅 id の並び）。地図に料金の経路を描くのに使う
+export interface CheapestPaths {
+  a: string[];
+  b: string[];
+}
+
 export interface MeetingResult {
   fare: Candidate[];
   km: Candidate[];
+  cheapest: CheapestPaths;
 }
 
 // A か B から目的駅まで線路がつながっていない

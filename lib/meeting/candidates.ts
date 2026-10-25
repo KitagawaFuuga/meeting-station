@@ -18,7 +18,7 @@ const FARE_PREFILTER_LIMIT = 1.0;
 const EPS = 1e-9;
 // 運賃の精査に使う経路で、事業者が変わる乗換1回に足す距離（km-tree.ts の operatorChangePenalty）。
 // 初乗り1回分（概ね 10km の運賃）より重くして、近道のための乗り継ぎを避けさせる
-const FARE_PATH_OPERATOR_PENALTY_KM = 15;
+export const FARE_PATH_OPERATOR_PENALTY_KM = 15;
 
 // 目的駅を根にした木の経路（目的駅→M）を、M→目的駅 の向きに直す
 function reversed(edges: GraphEdge[]): GraphEdge[] {
@@ -71,7 +71,9 @@ export function findMeetingCandidates(
       const toM = pathEdges(tree, mId) ?? [];
       return fareAlongPath(graph, calc, rootId, [...toM, ...toDest]);
     };
-    return { cheapestFare, via };
+    // 探索が予算内に着けなかったとき（通常は起きない）は、予算にした経路を最安とみなす
+    const path = cheapest?.nodeIds ?? [rootId, ...direct.map((e) => e.to)];
+    return { cheapestFare, via, path };
   };
   const fareA = fareSide(aId);
   const fareB = fareSide(bId);
@@ -135,5 +137,5 @@ export function findMeetingCandidates(
       shared: fareAlongPath(graph, calc, id, toDest),
     });
   }
-  return { fare, km };
+  return { fare, km, cheapest: { a: fareA.path, b: fareB.path } };
 }
