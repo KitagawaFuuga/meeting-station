@@ -1,5 +1,16 @@
-import { HONSHU_OPERATORS, type FareCalculator } from "@/lib/fare/calculator";
+import type { FareCalculator } from "@/lib/fare/calculator";
 import type { RailGraph } from "@/lib/graph/types";
+import {
+  advanceFareState,
+  EAST_KM_OPERATOR,
+  initialFareState,
+  localKmOf,
+  segmentEastKmContribution,
+  toAdjacentEdge,
+  type AdjacentEdge,
+  type FareState,
+  type FareStepContext,
+} from "@/lib/search/fare-step";
 import { MinHeap } from "@/lib/search/heap";
 
 export interface ReachableStation {
@@ -7,28 +18,8 @@ export interface ReachableStation {
   fare: number;
 }
 
-interface SearchState {
-  stationId: string;
-  confirmedFare: number; // 確定済み区間の運賃合計
-  segmentOperator: string; // 進行中区間の事業者（"" = 未乗車）
-  segmentFromId: string; // 進行中区間の開始駅（特定運賃は区間全体の駅ペアに適用するため必要）
-  segmentKm: number; // 進行中区間の距離
-  // 運賃計算の発駅。通し運賃の間は JR本州3社に乗り始めた駅、それ以外は segmentFromId。
-  // 特定都区市内の規則は通しの発駅で判定するので、会社境界を越えても持ち回る
-  fareFromId: string;
-  // JR本州3社間の会社境界を1回以上跨いで通算中か。true の間は confirmedFare を
-  // 確定させず、基準額＋加算額方式で計算する。
-  // honshuThroughKm===0 を代わりに使ってはいけない（距離0のrailエッジで境界を
-  // 跨いだ直後は通算中なのに 0 のままになる）。
-  isHonshuThrough: boolean;
-  honshuThroughKm: number; // 通算中の距離。segmentKm は含まない。非通算中は 0
-  honshuThroughEastKm: number; // うち加算額の対象になる距離
-  // 進行中区間がすべて地方交通線か（true→falseのみ）。true なら地方交通線の表を
-  // 営業キロ（segmentLocalKm）で引く。通し運賃（isHonshuThrough）の間は常に false
-  // （通し運賃の地方交通線の扱いは未対応。換算キロで幹線の表を引く近似のまま）
-  segmentAllLocal: boolean;
-  segmentLocalKm: number; // 進行中区間の営業キロ。segmentAllLocal の間だけ意味を持つ
-  fare: number; // confirmedFare + 進行中区間の運賃。状態生成時に確定する
+// 状態の各項目の意味は lib/search/fare-step.ts の FareState
+interface SearchState extends FareState {
   entry: ParetoEntry; // pop 時の生死判定を O(1) にするための挿入先への参照
 }
 
@@ -64,50 +55,8 @@ const PENDING_ENTRY: ParetoEntry = Object.freeze({
   alive: false,
 });
 
-// 加算額の対象になる事業者。JR東日本の区間の距離（eastKm）だけが加算額の対象。
-// 2026年3月の改定で東京〜熱海の東海道新幹線と在来線は別線になり、在来線経由は
-// 加算額がかかる。このアプリは普通列車で行ける範囲を出すので、新幹線経由とみなす
-// 除外はしない（docs/search-design.md「2. 加算額（東京〜熱海）」）。
-export const EAST_KM_OPERATOR = "JR東日本";
-
-function segmentEastKmContribution(
-  segmentOperator: string,
-  segmentKm: number,
-): number {
-  return segmentOperator === EAST_KM_OPERATOR ? segmentKm : 0;
-}
-
-// 進行中区間を「今この駅で降りた場合の運賃」として評価する。
-function evaluateSegmentFare(
-  calc: FareCalculator,
-  segmentOperator: string,
-  segmentKm: number,
-  isHonshuThrough: boolean,
-  honshuThroughKm: number,
-  honshuThroughEastKm: number,
-  fromName: string | undefined,
-  toName: string | undefined,
-  localKm: number | undefined,
-  fareFromName: string | undefined,
-): number {
-  if (isHonshuThrough) {
-    return calc.estimateHonshuThrough(
-      honshuThroughKm + segmentKm,
-      honshuThroughEastKm +
-        segmentEastKmContribution(segmentOperator, segmentKm),
-      fareFromName,
-      toName,
-    );
-  }
-  return calc.estimate(segmentOperator, segmentKm, fromName, toName, localKm);
-}
-
-// 区間が地方交通線だけのときの営業キロ。そうでなければ undefined（幹線の表で引く）
-const localKmOf = (state: {
-  segmentAllLocal: boolean;
-  segmentLocalKm: number;
-}): number | undefined =>
-  state.segmentAllLocal ? state.segmentLocalKm : undefined;
+// 既存の import 先を壊さないよう、fare-step.ts へ移した定数をここからも出す
+export { EAST_KM_OPERATOR };
 
 // bucket の非支配集合へ挿入する。既存に支配されていれば false を返す。呼び出し側が
 // 完全な ParetoEntry を渡すのは、dominates に渡るオブジェクトの形を揃えるため。
@@ -194,51 +143,22 @@ function runSearch(
   fromId: string,
   budget: number,
 ): ParetoStore {
-  const adjacency = new Map<
-    string,
-    {
-      to: string;
-      km: number;
-      kind: "rail" | "transfer";
-      operator: string;
-      // 地方交通線の辺なら営業キロ、そうでなければ undefined
-      localKm: number | undefined;
-    }[]
-  >();
-  const addAdj = (
-    from: string,
-    to: string,
-    km: number,
-    kind: "rail" | "transfer",
-    operator: string,
-    localKm: number | undefined,
-  ) => {
-    const arr = adjacency.get(from) ?? [];
-    arr.push({ to, km, kind, operator, localKm });
-    adjacency.set(from, arr);
-  };
   // 探索が扱う距離は運賃計算キロ（fareKm）。運賃を引くのも枝刈りの次元も距離は
   // ここだけで、外に出すのは運賃だけ（ReachableStation は距離を持たない）なので、
-  // 隣接表を作る時点で入れ替えれば足りる。営業キロと違う事業者の根拠は
-  // lib/graph/types.ts の GraphEdge.fareKm 参照。
-  //
-  // 地方交通線の辺は「換算キロ（fareKm）が営業キロより長い、地方交通線の表を持つ
-  // 事業者の辺」で見分ける（換算キロは data/fare-distance-classes.json の地方交通線
-  // だけに入る）。名鉄の擬制キロなど、表を持たない事業者の fareKm は対象外。
+  // 隣接表を作る時点で入れ替えれば足りる（toAdjacentEdge）。
+  const adjacency = new Map<string, AdjacentEdge[]>();
+  const addAdj = (from: string, edge: AdjacentEdge) => {
+    const arr = adjacency.get(from) ?? [];
+    arr.push(edge);
+    adjacency.set(from, arr);
+  };
   for (const e of graph.edges) {
-    const km = e.fareKm ?? e.km;
-    const localKm =
-      e.kind === "rail" &&
-      e.fareKm !== undefined &&
-      e.fareKm > e.km &&
-      calc.hasLocalTable(e.operator)
-        ? e.km
-        : undefined;
-    addAdj(e.from, e.to, km, e.kind, e.operator, localKm);
-    addAdj(e.to, e.from, km, e.kind, e.operator, localKm);
+    addAdj(e.from, toAdjacentEdge(calc, e));
+    addAdj(e.to, toAdjacentEdge(calc, { ...e, from: e.to, to: e.from }));
   }
 
   const nameOf = (id: string): string | undefined => graph.nodes[id]?.name;
+  const stepCtx: FareStepContext = { calc, nameOf };
 
   // bucket キーに使う segmentFromId 由来のキー。起点が override の駅ペアに
   // 登場しなければ将来の運賃に影響しないので、まとめて "" に潰してよい
@@ -304,18 +224,7 @@ function runSearch(
     initialEntry,
   );
   const initial: SearchState = {
-    stationId: fromId,
-    confirmedFare: 0,
-    segmentOperator: "",
-    segmentFromId: fromId,
-    segmentKm: 0,
-    fareFromId: fromId,
-    isHonshuThrough: false,
-    honshuThroughKm: 0,
-    honshuThroughEastKm: 0,
-    segmentAllLocal: false,
-    segmentLocalKm: 0,
-    fare: 0,
+    ...initialFareState(fromId),
     entry: initialEntry,
   };
   const heap = new MinHeap<SearchState>((a, b) => a.fare - b.fare);
@@ -329,131 +238,10 @@ function runSearch(
     if (!state.entry.alive) continue;
 
     for (const edge of adjacency.get(state.stationId) ?? []) {
-      let next: SearchState;
-      if (edge.kind === "transfer") {
-        // stationId だけ差し替えて fare を引き継ぐと、override 判定に使う「現在駅名」
-        // が乗り換え前のままになる。必ず再計算する。
-        next = {
-          ...state,
-          stationId: edge.to,
-          fare:
-            state.confirmedFare +
-            evaluateSegmentFare(
-              calc,
-              state.segmentOperator,
-              state.segmentKm,
-              state.isHonshuThrough,
-              state.honshuThroughKm,
-              state.honshuThroughEastKm,
-              nameOf(state.segmentFromId),
-              nameOf(edge.to),
-              localKmOf(state),
-              nameOf(state.fareFromId),
-            ),
-          entry: PENDING_ENTRY,
-        };
-      } else if (edge.operator === state.segmentOperator) {
-        const segmentKm = state.segmentKm + edge.km;
-        const segmentAllLocal =
-          state.segmentAllLocal && edge.localKm !== undefined;
-        const segmentLocalKm = state.segmentLocalKm + (edge.localKm ?? 0);
-        next = {
-          ...state,
-          stationId: edge.to,
-          segmentKm,
-          segmentAllLocal,
-          segmentLocalKm,
-          fare:
-            state.confirmedFare +
-            evaluateSegmentFare(
-              calc,
-              state.segmentOperator,
-              segmentKm,
-              state.isHonshuThrough,
-              state.honshuThroughKm,
-              state.honshuThroughEastKm,
-              nameOf(state.segmentFromId),
-              nameOf(edge.to),
-              segmentAllLocal ? segmentLocalKm : undefined,
-              nameOf(state.fareFromId),
-            ),
-          entry: PENDING_ENTRY,
-        };
-      } else if (
-        HONSHU_OPERATORS.has(state.segmentOperator) &&
-        HONSHU_OPERATORS.has(edge.operator)
-      ) {
-        // JR本州3社どうしの会社境界。区間を確定せず通算距離を積み増して継続する
-        // （＝ここではまだ運賃を払わない）。state.stationId は直前区間の真の終端。
-        const honshuThroughKm = state.honshuThroughKm + state.segmentKm;
-        const honshuThroughEastKm =
-          state.honshuThroughEastKm +
-          segmentEastKmContribution(state.segmentOperator, state.segmentKm);
-        const segmentKm = edge.km;
-        next = {
-          stationId: edge.to,
-          confirmedFare: state.confirmedFare,
-          segmentOperator: edge.operator,
-          segmentFromId: state.stationId,
-          segmentKm,
-          // 非通算中の fareFromId は区間の起点なので、そのまま通しの発駅になる
-          fareFromId: state.fareFromId,
-          isHonshuThrough: true,
-          honshuThroughKm,
-          honshuThroughEastKm,
-          segmentAllLocal: false,
-          segmentLocalKm: 0,
-          fare:
-            state.confirmedFare +
-            calc.estimateHonshuThrough(
-              honshuThroughKm + segmentKm,
-              honshuThroughEastKm +
-                segmentEastKmContribution(edge.operator, segmentKm),
-              nameOf(state.fareFromId),
-              nameOf(edge.to),
-            ),
-          entry: PENDING_ENTRY,
-        };
-      } else {
-        // 事業者切り替え。進行中区間をここで確定する。
-        const confirmedFare =
-          state.confirmedFare +
-          evaluateSegmentFare(
-            calc,
-            state.segmentOperator,
-            state.segmentKm,
-            state.isHonshuThrough,
-            state.honshuThroughKm,
-            state.honshuThroughEastKm,
-            nameOf(state.segmentFromId),
-            nameOf(state.stationId),
-            localKmOf(state),
-            nameOf(state.fareFromId),
-          );
-        next = {
-          stationId: edge.to,
-          confirmedFare,
-          segmentOperator: edge.operator,
-          segmentFromId: state.stationId,
-          segmentKm: edge.km,
-          fareFromId: state.stationId,
-          isHonshuThrough: false,
-          honshuThroughKm: 0,
-          honshuThroughEastKm: 0,
-          segmentAllLocal: edge.localKm !== undefined,
-          segmentLocalKm: edge.localKm ?? 0,
-          fare:
-            confirmedFare +
-            calc.estimate(
-              edge.operator,
-              edge.km,
-              nameOf(state.stationId),
-              nameOf(edge.to),
-              edge.localKm,
-            ),
-          entry: PENDING_ENTRY,
-        };
-      }
+      const next: SearchState = {
+        ...advanceFareState(stepCtx, state, edge),
+        entry: PENDING_ENTRY,
+      };
       // next.fare は override により非単調なので、これで刈ると「区間の途中は予算超過
       // だが override で安くなる終点」を取りこぼす。代わりに confirmedFare（経路に
       // 沿って非減少）に区間の下界を足した値で刈る。
