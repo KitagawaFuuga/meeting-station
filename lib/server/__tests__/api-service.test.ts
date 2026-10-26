@@ -56,6 +56,25 @@ describe("suggestStations", () => {
     expect(r[0]?.name).toBe("新宿");
   });
 
+  it("同じくらい一致する駅が多いときは、乗り入れる路線の多い駅を先に出す", () => {
+    // 「東」で始まる1路線だけの駅を 12 駅並べ、最後に 3 路線が乗り入れる「東京」を置く。
+    // 駅データの並び順のままだと、東京は上位 10 件に入らない
+    const small = Array.from({ length: 12 }, (_, i) =>
+      node(`E${i}`, `東${"森室釧旭相青能八大久根"[i] ?? "沢"}`, 43, 141),
+    );
+    const tokyo = ["L1", "L2", "L3"].map((line, i) =>
+      node(`T${i}`, "東京", 35.68, 139.77, "G_TOKYO", line),
+    );
+    const many = createGraphStore(
+      {
+        nodes: Object.fromEntries([...small, ...tokyo].map((n) => [n.id, n])),
+        edges: [],
+      },
+      rules,
+    );
+    expect(suggestStations(many, "東")[0]?.name).toBe("東京");
+  });
+
   it("候補に座標を含める（選んだ時点で駅を地図に描くため）", () => {
     const [shinjuku] = suggestStations(store, "新宿");
     expect(shinjuku).toMatchObject({ lat: 35.69, lng: 139.7 });
