@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createGraphStore } from "@/lib/server/graph-store";
-import {
-  reachable,
-  suggestStations,
-  walkStationIds,
-} from "@/lib/server/api-service";
+import { suggestStations } from "@/lib/server/api-service";
 import type { RailGraph } from "@/lib/graph/types";
 
 const node = (
@@ -39,7 +35,6 @@ const graph: RailGraph = {
     { from: "S1", to: "S4", km: 2, kind: "rail", operator: "テスト鉄道" },
   ],
 };
-// 1km までは 150円、3km までは 300円（S2 経由は 150円・S4 経由は 300円になる想定）
 const rules = [
   {
     id: "t",
@@ -61,85 +56,8 @@ describe("suggestStations", () => {
     expect(r[0]?.name).toBe("新宿");
   });
 
-  it("候補に座標を含める（選んだ時点で出発駅を地図に描くため）", () => {
+  it("候補に座標を含める（選んだ時点で駅を地図に描くため）", () => {
     const [shinjuku] = suggestStations(store, "新宿");
     expect(shinjuku).toMatchObject({ lat: 35.69, lng: 139.7 });
-  });
-});
-
-describe("reachable", () => {
-  it("予算内の駅を bracket 付きで返し、出発駅は含まない", () => {
-    const r = reachable(store, "S1", 500);
-    expect(r.stations.some((s) => s.id === "S1")).toBe(false);
-    const yoyogi = r.stations.find((s) => s.name === "代々木");
-    expect(yoyogi?.fare).toBe(150);
-    expect(yoyogi?.bracket).toBe(0);
-    expect(r.meta.count).toBe(r.stations.length);
-  });
-
-  it("出発駅と同一グループの別路線ノードも結果から除外される", () => {
-    const r = reachable(store, "S1", 500);
-    // S3 は S1 と同一グループ (G_SHINJUKU) の新宿駅なので、id 単位ではなく
-    // groupId 単位で除外されないと漏れてしまう
-    expect(r.stations.some((s) => s.id === "S3")).toBe(false);
-    expect(r.stations.some((s) => s.name === "新宿")).toBe(false);
-  });
-
-  it("同一グループ内で複数の到達経路がある場合は最小運賃が採用される", () => {
-    const r = reachable(store, "S1", 500);
-    // 代々木グループ (G_YOYOGI) には S2 (150円) と S4 (300円) の2経路があるが、
-    // 代表として採用されるのは fare が小さい S2 のみ
-    const yoyogiEntries = r.stations.filter((s) => s.name === "代々木");
-    expect(yoyogiEntries.length).toBe(1);
-    expect(yoyogiEntries[0]?.id).toBe("S2");
-    expect(yoyogiEntries[0]?.fare).toBe(150);
-  });
-});
-
-// 徒歩連絡（groupId が異なる駅どうしの transfer エッジ）を含むグラフ。
-// A社の終点 W1 から、別の駅 W2 まで歩いて B 社に乗り継げる形にする。
-const walkGraph: RailGraph = {
-  nodes: {
-    W0: node("W0", "起点", 35.69, 139.7, "G_W0"),
-    W1: node("W1", "乗換元", 35.683, 139.702, "G_W1"),
-    W2: node("W2", "乗換先", 35.6832, 139.7022, "G_W2"),
-    W3: node("W3", "目的地", 35.68, 139.71, "G_W3"),
-    // 徒歩を使わずに W3 へ着く迂回路（高くつく）
-    W4: node("W4", "迂回", 35.7, 139.72, "G_W4"),
-  },
-  edges: [
-    { from: "W0", to: "W1", km: 0.5, kind: "rail", operator: "テスト鉄道" },
-    // 徒歩連絡: groupId が異なる 0km transfer
-    { from: "W1", to: "W2", km: 0, kind: "transfer", operator: "" },
-    { from: "W2", to: "W3", km: 0.5, kind: "rail", operator: "テスト鉄道" },
-    // 迂回路は距離が長く、同じ W3 に高い運賃で着く
-    { from: "W0", to: "W4", km: 2.5, kind: "rail", operator: "テスト鉄道" },
-    { from: "W4", to: "W3", km: 2.5, kind: "rail", operator: "テスト鉄道" },
-  ],
-};
-const walkStore = createGraphStore(walkGraph, rules);
-
-describe("walkStationIds（徒歩ありの判定）", () => {
-  const res = reachable(walkStore, "W0", 2000);
-  const walk = new Set(walkStationIds(walkStore, res));
-  const idOf = (name: string) => res.stations.find((s) => s.name === name)?.id;
-
-  it("運賃の結果には徒歩の判定を含めない（探索を1回で済ませるため）", () => {
-    expect(res.stations.every((s) => !("viaWalk" in s))).toBe(true);
-  });
-
-  it("徒歩連絡を通らないと同じ運賃で行けない駅を返す", () => {
-    expect(idOf("目的地")).toBeDefined();
-    expect(walk.has(idOf("目的地")!)).toBe(true);
-  });
-
-  it("徒歩を使わずに着ける駅は返さない", () => {
-    expect(walk.has(idOf("乗換元")!)).toBe(false);
-    expect(walk.has(idOf("迂回")!)).toBe(false);
-  });
-
-  it("徒歩連絡が無いグラフでは何も返さない", () => {
-    const r = reachable(store, "S1", 2000);
-    expect(walkStationIds(store, r)).toEqual([]);
   });
 });

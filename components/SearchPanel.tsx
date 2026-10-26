@@ -24,7 +24,7 @@ export default function SearchPanel({
   const [open, setOpen] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // デバウンスだけでは、先の入力の応答が後から届いたときに古い候補で上書きされる
-  // （「新宿」と入力しても「新」の候補が出た）。hooks/use-reachable.ts と同じく
+  // （「新宿」と入力しても「新」の候補が出た）。hooks/use-meeting.ts と同じく
   // 世代カウンタで最新の問い合わせの応答だけを反映する
   const requestIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);

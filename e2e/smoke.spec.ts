@@ -1,5 +1,27 @@
 import { test, expect, type Page } from "@playwright/test";
+import sharp from "sharp";
+import { ROUTE_COLORS } from "../lib/route-colors";
 import { stubTiles } from "./helpers";
+
+// 地図のスクリーンショットのうち、指定した色（#rrggbb）の画素数。
+// 地図側は GeoJSON ソースに描くだけで DOM に要素が出ないので、画素で数える。
+async function pixelsOf(png: Buffer, hex: string): Promise<number> {
+  const [r, g, b] = (hex.match(/[0-9a-f]{2}/gi) ?? []).map((h) =>
+    parseInt(h, 16),
+  );
+  const { data, info } = await sharp(png)
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  let n = 0;
+  for (let k = 0; k < data.length; k += info.channels)
+    if (
+      Math.abs(data[k]! - r!) < 10 &&
+      Math.abs(data[k + 1]! - g!) < 10 &&
+      Math.abs(data[k + 2]! - b!) < 10
+    )
+      n++;
+  return n;
+}
 
 // 同じパネルがサイドバー(デスクトップ)とボトムシート(md:hidden)の2箇所に描画される。
 // デスクトップ幅で走らせるので、サイドバー側だけを触る。
@@ -104,4 +126,48 @@ test("物差しを距離に切り替えると、表の単位が km になる", a
   await expect(firstShared).toHaveText(/km$/);
   // 単位の表示だけでなく、距離の候補一覧に入れ替わっている
   expect(await sharedColumn(page)).not.toEqual(fareValues);
+});
+
+test("表の行を選ぶと、その駅を via にした経路を取りに行き、地図に Aさんの経路が描かれる", async ({
+  page,
+}) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const firstRow = sidebar(page).getByRole("table").locator("tbody tr").first();
+  await expect(firstRow).toBeVisible({ timeout: 30_000 });
+  const pathResponse = page.waitForResponse(
+    (res) =>
+      res.url().includes("/api/meeting/path?") &&
+      res.url().includes("via=") &&
+      res.url().includes("metric=fare"),
+  );
+  await firstRow.getByRole("button").click();
+  expect((await pathResponse).status()).toBe(200);
+  // 線が描かれ、地図がその経路に寄るのを待つ
+  await expect
+    .poll(
+      async () =>
+        pixelsOf(
+          await page.locator("canvas.maplibregl-canvas").screenshot(),
+          ROUTE_COLORS.a,
+        ),
+      { timeout: 15_000 },
+    )
+    // A の出発駅の印（同じ色の丸、100画素ほど）も写るので、線と言える量を求める
+    .toBeGreaterThan(400);
+});
+
+test("経路を表示中に物差しを切り替えると、metric を変えて経路を取り直す", async ({
+  page,
+}) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const firstRow = sidebar(page).getByRole("table").locator("tbody tr").first();
+  await expect(firstRow).toBeVisible({ timeout: 30_000 });
+  await firstRow.getByRole("button").click();
+  const kmPath = page.waitForResponse(
+    (res) =>
+      res.url().includes("/api/meeting/path?") &&
+      res.url().includes("metric=km"),
+  );
+  await sidebar(page).getByLabel("距離").check();
+  expect((await kmPath).status()).toBe(200);
 });

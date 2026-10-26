@@ -8,6 +8,7 @@ import Logo from "@/components/Logo";
 import TripInput, { type TripField } from "@/components/TripInput";
 import ViewToggles from "@/components/ViewToggles";
 import { useMeeting } from "@/hooks/use-meeting";
+import { useMeetingPath } from "@/hooks/use-meeting-path";
 import { sortCandidates, type SortOrder } from "@/lib/meeting/sort";
 import type { Candidate, Metric } from "@/lib/meeting/types";
 import type { SheetState } from "@/lib/sheet";
@@ -28,6 +29,12 @@ export default function Home() {
   const [selected, setSelected] = useState<Candidate | null>(null);
   const [sheet, setSheet] = useState<SheetState>("half");
   const { data, loading, error, search } = useMeeting();
+  // 物差しを切り替えたら、選んだ駅の経路もその物差しで取り直す
+  const legs = useMeetingPath(
+    data?.meta ?? null,
+    selected?.stationId ?? null,
+    metric,
+  );
 
   const candidates = useMemo(
     () => (data ? sortCandidates(data[metric], order) : []),
@@ -97,7 +104,13 @@ export default function Home() {
         {panel}
       </aside>
       <div className="relative flex-1">
-        <MapView stations={[]} origin={null} focus={null} resultKey={null} />
+        <MapView
+          candidates={candidates}
+          endpoints={trip}
+          selected={selected}
+          legs={legs}
+          resultKey={data?.meta}
+        />
       </div>
       <BottomSheet state={sheet} onStateChange={setSheet}>
         {panel}
