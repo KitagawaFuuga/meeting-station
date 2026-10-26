@@ -79,7 +79,11 @@ export default function Home() {
         candidates={candidates}
         metric={metric}
         selectedGroupId={selected?.groupId ?? null}
-        onPick={setSelected}
+        onPick={(c) => {
+          setSelected(c);
+          // スマホでは選んだ合流駅の経路を見せるため、シートを畳んで地図を主役にする
+          setSheet("collapsed");
+        }}
       />
       {/* CC BY 4.0 のデータ（運行本数データ・公共交通オープンデータセンター）は
           表示が条件なので、出典から外さないこと。改変の有無（加工して使用）と、
