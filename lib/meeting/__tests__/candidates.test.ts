@@ -67,6 +67,20 @@ describe("findMeetingCandidates", () => {
     expect(km.some((c) => c.groupId === "Z")).toBe(false);
   });
 
+  it("目的駅の先にある駅は、遠回りが半分以内でも候補に入らない", () => {
+    // D の先 5km の E。A の遠回りは 10km（上限 15km）だが、二人とも目的駅を通り過ぎてから落ち合うことになる
+    const g = createGraphStore(
+      {
+        nodes: { ...lineGraph.nodes, E: node("E") },
+        edges: [...lineGraph.edges, rail("D", "E", 5)],
+      },
+      rules,
+    );
+    const r = findMeetingCandidates(g, "A", "B", "D");
+    expect(r.km.some((c) => c.groupId === "E")).toBe(false);
+    expect(r.fare.some((c) => c.groupId === "E")).toBe(false);
+  });
+
   it("目的駅は isDestination が true、一緒に乗る区間が 0 で必ず入る", () => {
     const d = findMeetingCandidates(store, "A", "B", "D").km.find(
       (c) => c.groupId === "D",

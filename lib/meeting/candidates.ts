@@ -1,11 +1,11 @@
-import type { GraphEdge } from "@/lib/graph/types";
+import type { GraphEdge, RailGraph } from "@/lib/graph/types";
 import {
   UnreachableError,
   type Candidate,
   type MeetingResult,
 } from "@/lib/meeting/types";
 import { fareAlongPath } from "@/lib/search/fare-along-path";
-import { buildKmTree, pathEdges } from "@/lib/search/km-tree";
+import { buildKmTree, pathEdges, type KmTree } from "@/lib/search/km-tree";
 import { findCheapestPath } from "@/lib/search/reachable";
 import type { GraphStore } from "@/lib/server/graph-store";
 
@@ -19,6 +19,19 @@ const EPS = 1e-9;
 // 運賃の精査に使う経路で、事業者が変わる乗換1回に足す距離（km-tree.ts の operatorChangePenalty）。
 // 初乗り1回分（概ね 10km の運賃）より重くして、近道のための乗り継ぎを避けさせる
 export const FARE_PATH_OPERATOR_PENALTY_KM = 15;
+
+// 根から mId までの最短経路が、mId より手前で groupId の駅を通るか
+function passesGroup(
+  graph: RailGraph,
+  tree: KmTree,
+  mId: string,
+  groupId: string | undefined,
+): boolean {
+  if (groupId === undefined || graph.nodes[mId]?.groupId === groupId)
+    return false;
+  const edges = pathEdges(tree, mId) ?? [];
+  return edges.some((e) => graph.nodes[e.to]?.groupId === groupId);
+}
 
 // 目的駅を根にした木の経路（目的駅→M）を、M→目的駅 の向きに直す
 function reversed(edges: GraphEdge[]): GraphEdge[] {
@@ -97,6 +110,12 @@ export function findMeetingCandidates(
     const dD = tD.dist.get(id);
     const n = graph.nodes[id];
     if (dA === undefined || dB === undefined || dD === undefined || !n)
+      continue;
+    // 二人のどちらかが目的駅を通り過ぎてから着く駅は、合流しても意味がないので外す
+    if (
+      passesGroup(graph, tA, id, toGroup) ||
+      passesGroup(graph, tB, id, toGroup)
+    )
       continue;
     const kmDetourA = Math.max(0, dA + dD - dAD);
     const kmDetourB = Math.max(0, dB + dD - dBD);
