@@ -15,7 +15,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Legs } from "@/hooks/use-meeting-path";
 import { boundsOf } from "@/lib/geo";
 import type { Candidate } from "@/lib/meeting/types";
-import { CANDIDATE_SHADES, shadeIndex, TOP_PICKS } from "@/lib/candidate-shade";
+import {
+  CATEGORY_COLORS,
+  detourCategory,
+  TOP_PICKS,
+} from "@/lib/candidate-category";
 import { ROUTE_COLORS } from "@/lib/route-colors";
 
 type Endpoint = { name: string; lat: number; lng: number } | null;
@@ -44,46 +48,42 @@ const ROUTE_LAYER = "route-lines";
 // (scripts/copy-maplibre-worker.mjs が npm install / dev / build 前にコピーする)。
 setWorkerUrl("/maplibre-gl-worker.mjs");
 
-// candidates は表と同じ並び順で渡る。並び順から濃淡の段階を決める
 function candidatesGeoJson(candidates: Candidate[]): FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: candidates.map((c, i) => ({
+    features: candidates.map((c) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [c.lng, c.lat] },
-      properties: {
-        groupId: c.groupId,
-        shade: shadeIndex(i, candidates.length),
-      },
+      properties: { groupId: c.groupId, category: detourCategory(c) },
     })),
   };
 }
 
+// 誰が遠回りするかで塗り分ける（lib/candidate-category.ts）
 const CANDIDATE_COLOR: ExpressionSpecification = [
   "match",
-  ["get", "shade"],
-  0,
-  CANDIDATE_SHADES[0],
-  1,
-  CANDIDATE_SHADES[1],
-  2,
-  CANDIDATE_SHADES[2],
-  3,
-  CANDIDATE_SHADES[3],
-  CANDIDATE_SHADES[4],
+  ["get", "category"],
+  "none",
+  CATEGORY_COLORS.none,
+  "a",
+  CATEGORY_COLORS.a,
+  "b",
+  CATEGORY_COLORS.b,
+  CATEGORY_COLORS.both,
 ];
 
 // 表の上位の印: 番号を書いた丸。円より大きくして、どこから見ればよいかを示す。
 // クリックは下の円へ通す（円を押すと吹き出しが開く）
-function buildTopPickElement(rank: number, name: string): HTMLElement {
+function buildTopPickElement(rank: number, c: Candidate): HTMLElement {
   const el = document.createElement("div");
   el.setAttribute("role", "img");
-  el.setAttribute("aria-label", `おすすめ${rank}: ${name}`);
+  el.setAttribute("aria-label", `おすすめ${rank}: ${c.name}`);
   el.className =
     "pointer-events-none flex h-7 w-7 items-center justify-center rounded-full border-[3px] bg-white text-sm font-bold shadow-md";
-  // 白地に濃い段階の縁と数字。円の群れの中でも浮いて見えるようにする
-  el.style.borderColor = CANDIDATE_SHADES[0];
-  el.style.color = CANDIDATE_SHADES[0];
+  // 白地に、その駅の円と同じ色の縁と数字。円の群れの中でも浮いて見えるようにする
+  const color = CATEGORY_COLORS[detourCategory(c)];
+  el.style.borderColor = color;
+  el.style.color = color;
   el.textContent = String(rank);
   return el;
 }
@@ -273,7 +273,7 @@ export default function MapView({
       const c = picks[i];
       if (!c) continue;
       topPickMarkersRef.current.push(
-        new Marker({ element: buildTopPickElement(i + 1, c.name) })
+        new Marker({ element: buildTopPickElement(i + 1, c) })
           .setLngLat([c.lng, c.lat])
           .addTo(map),
       );

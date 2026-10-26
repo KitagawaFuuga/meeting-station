@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import sharp from "sharp";
+import { CATEGORY_COLORS } from "../lib/candidate-category";
 import { ROUTE_COLORS } from "../lib/route-colors";
 import { stubTiles } from "./helpers";
 
@@ -170,6 +171,35 @@ test("検索すると、地図に表の上位5件が番号つきで出て、1番
   await expect(
     page.getByRole("img", { name: `おすすめ1: ${firstName}` }),
   ).toBeVisible();
+});
+
+test("二人とも遠回りしない候補は、地図に緑の円で描かれる", async ({ page }) => {
+  await searchOmiyaTachikawaYokohama(page);
+  // 表の先頭は二人とも 0円（大宮・立川→横浜では多摩川など）
+  const firstRow = sidebar(page).getByRole("table").locator("tbody tr").first();
+  await expect(firstRow.locator("td").nth(1)).toHaveText("0円", {
+    timeout: 30_000,
+  });
+  await expect
+    .poll(
+      async () =>
+        pixelsOf(
+          await page.locator("canvas.maplibregl-canvas").screenshot(),
+          CATEGORY_COLORS.none,
+        ),
+      { timeout: 15_000 },
+    )
+    .toBeGreaterThan(30);
+});
+
+test("検索すると、地図の色の意味を示す凡例が表の上に出る", async ({ page }) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const legend = sidebar(page).getByRole("list", { name: "地図の色" });
+  await expect(legend).toBeVisible({ timeout: 30_000 });
+  await expect(legend).toContainText("二人とも遠回りなし");
+  await expect(legend).toContainText("Aさんだけ遠回り");
+  await expect(legend).toContainText("Bさんだけ遠回り");
+  await expect(legend).toContainText("二人とも遠回り");
 });
 
 test("経路を表示中に物差しを切り替えると、metric を変えて経路を取り直す", async ({

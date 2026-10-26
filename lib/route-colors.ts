@@ -5,4 +5,4 @@ export const ROUTE_COLORS = {
   b: "#5b3fc4", // Bさん: 青紫
   shared: "#0f4c5c", // 合流してから目的駅まで: 深い青緑（太線）
 } as const;
-// 候補の駅の円の色は lib/candidate-shade.ts（表の順位で濃淡をつける）
+// 候補の駅の円の色は lib/candidate-category.ts（誰が遠回りするかで塗り分ける）
