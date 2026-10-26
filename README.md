@@ -18,8 +18,8 @@ http://localhost:3000 で起動する。
 ### テスト
 
 ```
-npm run test    # ロジック（374件・約3秒）
-npm run e2e     # ブラウザ実機のスモーク3本
+npm run test    # ロジック（約1060件）
+npm run e2e     # ブラウザ実機のスモーク（デスクトップ6本・スマホ1本）
 ```
 
 `npm run e2e` は本番ビルドを作ってから Chromium で触る。`next dev` ではなく
@@ -78,12 +78,10 @@ curl "http://localhost:3000/api/reachable?from=<上で得た駅 id>&budget=500"
 ## デプロイ（初回の手動セットアップ）
 
 1. GitHub リポジトリの Secrets に `DOCKERHUB_USERNAME` / `DOCKERHUB_TOKEN` / `AZURE_CREDENTIALS` を設定
-2. Azure: `az group create -n fare-map-rg -l japaneast`
-3. `az containerapp env create` / `az containerapp create --name fare-map --min-replicas 0 --memory 1Gi --target-port 3000 --ingress external`
+2. Azure: `az group create -n meeting-station-rg -l japaneast`
+3. `az containerapp env create` / `az containerapp create --name meeting-station --min-replicas 0 --memory 1Gi --target-port 3000 --ingress external`
 4. 以後は `main` への push で `.github/workflows/deploy.yml` が自動デプロイする
-5. （任意）駅すぱあと API フリープランのキーを取得済みなら、Container App の環境変数に `EKISPERT_API_KEY` を設定する。
-   未設定の場合は経路検索リンクが Google Maps へのフォールバックになる。
-6. （任意）レート制限とキャッシュの既定値は `.env.example` 参照。既定のままで動く。
+5. （任意）レート制限とキャッシュの既定値は `.env.example` 参照。既定のままで動く。
 
 `--min-replicas 0` は課金を抑えるが、レプリカが増えるとレート制限と結果キャッシュは
 レプリカごとに独立する（どちらもプロセス内のメモリに載る）。`--max-replicas` を絞るか、
@@ -94,11 +92,11 @@ curl "http://localhost:3000/api/reachable?from=<上で得た駅 id>&budget=500"
 CI（`deploy.yml`）と同じく、本番と同じ standalone サーバーを起動して確かめられる。
 
 ```
-docker build -t fare-map:verify .
-docker run -d --name fare-map-verify -p 3125:3000 fare-map:verify
+docker build -t meeting-station:verify .
+docker run -d --name meeting-station-verify -p 3125:3000 meeting-station:verify
 curl -s -D - -o /dev/null http://127.0.0.1:3125/ | grep -i content-security-policy
 curl -s "http://127.0.0.1:3125/api/stations?q=%E6%96%B0%E5%AE%BF"
-docker rm -f fare-map-verify
+docker rm -f meeting-station-verify
 ```
 
 `npm run e2e` は `next start` を使うが、`output: standalone` とは組み合わせられない
