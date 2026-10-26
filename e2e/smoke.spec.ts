@@ -156,6 +156,22 @@ test("表の行を選ぶと、その駅を via にした経路を取りに行き
     .toBeGreaterThan(400);
 });
 
+test("検索すると、地図に表の上位5件が番号つきで出て、1番は表の先頭の駅になる", async ({
+  page,
+}) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const firstRow = sidebar(page).getByRole("table").locator("tbody tr").first();
+  await expect(firstRow).toBeVisible({ timeout: 30_000 });
+  const firstName = (
+    await firstRow.locator("td").first().textContent()
+  )?.trim();
+  const picks = page.getByRole("img", { name: /^おすすめ\d/ });
+  await expect(picks).toHaveCount(5);
+  await expect(
+    page.getByRole("img", { name: `おすすめ1: ${firstName}` }),
+  ).toBeVisible();
+});
+
 test("経路を表示中に物差しを切り替えると、metric を変えて経路を取り直す", async ({
   page,
 }) => {

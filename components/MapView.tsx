@@ -15,6 +15,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import type { Legs } from "@/hooks/use-meeting-path";
 import { boundsOf } from "@/lib/geo";
 import type { Candidate } from "@/lib/meeting/types";
+import { CANDIDATE_SHADES, shadeIndex, TOP_PICKS } from "@/lib/candidate-shade";
 import { ROUTE_COLORS } from "@/lib/route-colors";
 
 type Endpoint = { name: string; lat: number; lng: number } | null;
@@ -43,15 +44,48 @@ const ROUTE_LAYER = "route-lines";
 // (scripts/copy-maplibre-worker.mjs が npm install / dev / build 前にコピーする)。
 setWorkerUrl("/maplibre-gl-worker.mjs");
 
+// candidates は表と同じ並び順で渡る。並び順から濃淡の段階を決める
 function candidatesGeoJson(candidates: Candidate[]): FeatureCollection {
   return {
     type: "FeatureCollection",
-    features: candidates.map((c) => ({
+    features: candidates.map((c, i) => ({
       type: "Feature",
       geometry: { type: "Point", coordinates: [c.lng, c.lat] },
-      properties: { groupId: c.groupId },
+      properties: {
+        groupId: c.groupId,
+        shade: shadeIndex(i, candidates.length),
+      },
     })),
   };
+}
+
+const CANDIDATE_COLOR: ExpressionSpecification = [
+  "match",
+  ["get", "shade"],
+  0,
+  CANDIDATE_SHADES[0],
+  1,
+  CANDIDATE_SHADES[1],
+  2,
+  CANDIDATE_SHADES[2],
+  3,
+  CANDIDATE_SHADES[3],
+  CANDIDATE_SHADES[4],
+];
+
+// 表の上位の印: 番号を書いた丸。円より大きくして、どこから見ればよいかを示す。
+// クリックは下の円へ通す（円を押すと吹き出しが開く）
+function buildTopPickElement(rank: number, name: string): HTMLElement {
+  const el = document.createElement("div");
+  el.setAttribute("role", "img");
+  el.setAttribute("aria-label", `おすすめ${rank}: ${name}`);
+  el.className =
+    "pointer-events-none flex h-7 w-7 items-center justify-center rounded-full border-[3px] bg-white text-sm font-bold shadow-md";
+  // 白地に濃い段階の縁と数字。円の群れの中でも浮いて見えるようにする
+  el.style.borderColor = CANDIDATE_SHADES[0];
+  el.style.color = CANDIDATE_SHADES[0];
+  el.textContent = String(rank);
+  return el;
 }
 
 function routesGeoJson(legs: Legs | null): FeatureCollection {
@@ -151,6 +185,7 @@ export default function MapView({
   const popupRef = useRef<Popup | null>(null);
   const selectedRef = useRef<Marker | null>(null);
   const endpointMarkersRef = useRef<Marker[]>([]);
+  const topPickMarkersRef = useRef<Marker[]>([]);
   // 地図の load より先にデータが届くと、下の setData はソースが無くて空振りする。
   // load でソースを作るときに最新の値を入れられるよう、ref にも持っておく
   const candidatesRef = useRef(candidates);
@@ -193,7 +228,7 @@ export default function MapView({
         source: CANDIDATE_SOURCE,
         paint: {
           "circle-radius": CIRCLE_RADIUS,
-          "circle-color": ROUTE_COLORS.candidate,
+          "circle-color": CANDIDATE_COLOR,
           "circle-stroke-width": 1,
           "circle-stroke-color": "#ffffff",
         },
@@ -222,6 +257,28 @@ export default function MapView({
       mapRef.current = null;
     };
   }, []);
+
+  // 表の上位（現地集合を除く）に番号の印を置く。並べ方を切り替えたら置き直す
+  useEffect(() => {
+    const map = mapRef.current;
+    for (const m of topPickMarkersRef.current) m.remove();
+    topPickMarkersRef.current = [];
+    if (!map) return;
+    const picks = candidates
+      .filter((c) => !c.isDestination)
+      .slice(0, TOP_PICKS);
+    // 隣り合う駅（多摩川・自由が丘・田園調布など）では印が重なる。後から置いた印が
+    // 上に来るので、5番から置いて1番を一番上にする
+    for (let i = picks.length - 1; i >= 0; i--) {
+      const c = picks[i];
+      if (!c) continue;
+      topPickMarkersRef.current.push(
+        new Marker({ element: buildTopPickElement(i + 1, c.name) })
+          .setLngLat([c.lng, c.lat])
+          .addTo(map),
+      );
+    }
+  }, [candidates]);
 
   // 候補は数百件になるため、DOM マーカーではなく GeoJSON ソースの差し替えで描く
   useEffect(() => {
