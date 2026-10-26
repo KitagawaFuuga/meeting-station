@@ -82,7 +82,14 @@ export function findMeetingCandidates(
     const via = (mId: string, toDest: GraphEdge[]): number => {
       if (onCheapest.has(graph.nodes[mId]?.groupId)) return cheapestFare;
       const toM = pathEdges(tree, mId) ?? [];
-      return fareAlongPath(graph, calc, rootId, [...toM, ...toDest]);
+      // 駅ペアの特定運賃は発着の駅だけで当たり、どの経路を通ったかを見ない。
+      // 遠回りの経路にも直通の安い額が当たって遠回り 0 円に見えるので、
+      // 合流駅までと合流駅からの運賃を下回らないようにする
+      return Math.max(
+        fareAlongPath(graph, calc, rootId, [...toM, ...toDest]),
+        fareAlongPath(graph, calc, rootId, toM),
+        fareAlongPath(graph, calc, mId, toDest),
+      );
     };
     // 探索が予算内に着けなかったとき（通常は起きない）は、予算にした経路を最安とみなす
     const path = cheapest?.nodeIds ?? [rootId, ...direct.map((e) => e.to)];

@@ -158,6 +158,30 @@ describe("findMeetingCandidates", () => {
     expect(m?.detourA).toBe(60);
   });
 
+  it("駅ペアの特定運賃が遠回りの経路にも当たるときは、合流駅までの運賃を下回る遠回り 0 円にしない", () => {
+    // A -10- D の直通に、A→D の特定運賃 80円（表なら 100円）。枝 A -8- M -8- D。
+    // M 経由も同じ事業者の1区間なので、発着の駅ペアだけで特定運賃 80円が当たり遠回り 0 円に見える。
+    // 実際は A→M だけで 100円かかる（実例: 大阪→武田尾→神戸が 460円、大阪→武田尾だけで 580円）
+    const g = createGraphStore(
+      {
+        nodes: Object.fromEntries(["A", "D", "M"].map((id) => [id, node(id)])),
+        edges: [rail("A", "D", 10), rail("A", "M", 8), rail("M", "D", 8)],
+      },
+      rules,
+      [
+        {
+          operator: "OpA",
+          pairs: [{ from: "A", to: "D", fare: 80 }],
+          source: { url: "https://example.test", fetchedAt: "", note: "" },
+        },
+      ],
+    );
+    const m = findMeetingCandidates(g, "A", "A", "D").fare.find(
+      (c) => c.groupId === "M",
+    );
+    expect(m?.detourA).toBe(20);
+  });
+
   it("遠回りが計算誤差などで負に出ても 0 にする", () => {
     // 0.1 + (0.2 + 0.3) と (0.1 + 0.2) + 0.3 は浮動小数点で一致せず、x の遠回りが -1e-16 になる
     const g = createGraphStore(
