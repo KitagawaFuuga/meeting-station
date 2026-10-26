@@ -11,8 +11,8 @@ const bizUdpGothic = BIZ_UDPGothic({
 });
 
 export const metadata: Metadata = {
-  title: "fare-map",
-  description: "予算でどこまで行けるかを地図に表示",
+  title: "合流駅さがし",
+  description: "別々の駅から同じ目的駅へ向かう二人が、途中で落ち合える駅を探す",
 };
 
 export default function RootLayout({
