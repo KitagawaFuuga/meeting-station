@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UnreachableError } from "@/lib/meeting/types";
+import { TooFarError, UnreachableError } from "@/lib/meeting/types";
 import { getGraphStore } from "@/lib/server/graph-store";
 import { meetingPath } from "@/lib/server/meeting-service";
 import { PATH_ERROR, UNREACHABLE_ERROR, pathSchema } from "../query";
@@ -31,6 +31,9 @@ export function GET(req: NextRequest) {
     const { cheapest } = meetingService.candidates(store, q);
     return NextResponse.json(meetingPath(store, q, cheapest));
   } catch (e) {
+    if (e instanceof TooFarError) {
+      return NextResponse.json({ error: e.message }, { status: 422 });
+    }
     if (e instanceof UnreachableError) {
       return NextResponse.json({ error: UNREACHABLE_ERROR }, { status: 422 });
     }

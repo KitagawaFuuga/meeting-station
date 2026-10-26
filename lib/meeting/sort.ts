@@ -23,3 +23,13 @@ export function sortCandidates(
       Number(a.isDestination) - Number(b.isDestination) || compare(a, b),
   );
 }
+
+// 長距離では候補が数千件になり、計算も応答も表も重くなる。どちらの並べ方で
+// 見ても上位 n 件に入る候補と、目的駅（現地集合）だけを残す。順序は保証しない
+export function limitCandidates(list: Candidate[], n: number): Candidate[] {
+  const kept = new Set<Candidate>(list.filter((c) => c.isDestination));
+  for (const order of ["detour", "together"] as const) {
+    for (const c of sortCandidates(list, order).slice(0, n)) kept.add(c);
+  }
+  return [...kept];
+}

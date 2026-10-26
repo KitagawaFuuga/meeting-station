@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sortCandidates } from "@/lib/meeting/sort";
+import { limitCandidates, sortCandidates } from "@/lib/meeting/sort";
 import type { Candidate } from "@/lib/meeting/types";
 
 let seq = 0;
@@ -78,4 +78,20 @@ describe("sortCandidates", () => {
       expect(sorted.at(-1)).toBe(dest);
     },
   );
+});
+
+describe("limitCandidates", () => {
+  it("どちらの並べ方でも上位 n 件に入る候補と、目的駅だけを残す", () => {
+    const fewestDetour = c({ detourA: 0, shared: 5 });
+    const longestTogether = c({ detourA: 40, shared: 50 });
+    const neither = c({ detourA: 30, shared: 10 });
+    const dest = c({ isDestination: true });
+    const kept = limitCandidates(
+      [neither, dest, longestTogether, fewestDetour],
+      1,
+    );
+    expect(new Set(kept)).toEqual(
+      new Set([fewestDetour, longestTogether, dest]),
+    );
+  });
 });

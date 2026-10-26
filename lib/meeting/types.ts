@@ -29,3 +29,6 @@ export interface MeetingResult {
 
 // A か B から目的駅まで線路がつながっていない
 export class UnreachableError extends Error {}
+
+// A か B から目的駅まで遠すぎて、運賃の探索に時間がかかりすぎる
+export class TooFarError extends Error {}

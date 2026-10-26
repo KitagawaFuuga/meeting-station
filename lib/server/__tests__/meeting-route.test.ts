@@ -10,6 +10,8 @@ const TACHIKAWA = "1131227";
 const SHURI = "9992715"; // ゆいレール。本州とは線路でつながっていない
 const OMIYA = "1131906";
 const YOKOHAMA = "1130105";
+const TOKYO = "1130101";
+const HAKATA = "1190231";
 
 let ipSeq = 0;
 const call = (query: string, ip = `198.51.100.${(ipSeq += 1)}`) =>
@@ -44,6 +46,13 @@ describe("GET /api/meeting", () => {
     expect(res.status).toBe(422);
     expect(await res.json()).toEqual({ error: "線路でつながっていません" });
   });
+
+  it("まっすぐ行く運賃が 1 万円を超える組は 422 で「遠すぎて合流駅を探せません」を返す", async () => {
+    const res = await call(`a=${TOKYO}&b=${TACHIKAWA}&to=${HAKATA}`);
+    expect(res.status).toBe(422);
+    expect(await res.json()).toEqual({ error: "遠すぎて合流駅を探せません" });
+    // 探索の前に断るので速いが、グラフの読み込みと最短経路木の作成はかかる
+  }, 30000);
 
   it("同じ IP から容量を超えて叩くと 429 と Retry-After を返す", async () => {
     // 入力が不正な問い合わせでも数える（検証より先に制限を掛ける）。計算が走らないので速い

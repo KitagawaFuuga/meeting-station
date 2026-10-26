@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { UnreachableError } from "@/lib/meeting/types";
+import { TooFarError, UnreachableError } from "@/lib/meeting/types";
 import { getGraphStore } from "@/lib/server/graph-store";
 import {
   SAME_STATION_ERROR,
@@ -40,6 +40,9 @@ export function GET(req: NextRequest) {
     const { fare, km } = meetingService.candidates(store, { a, b, to });
     return NextResponse.json({ fare, km, meta: { a, b, to } });
   } catch (e) {
+    if (e instanceof TooFarError) {
+      return NextResponse.json({ error: e.message }, { status: 422 });
+    }
     if (e instanceof UnreachableError) {
       return NextResponse.json({ error: UNREACHABLE_ERROR }, { status: 422 });
     }

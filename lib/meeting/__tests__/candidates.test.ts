@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { FareRule } from "@/lib/fare/types";
 import type { GraphEdge, RailGraph, StationNode } from "@/lib/graph/types";
 import { findMeetingCandidates } from "@/lib/meeting/candidates";
-import { UnreachableError } from "@/lib/meeting/types";
+import { TooFarError, UnreachableError } from "@/lib/meeting/types";
 import { createGraphStore } from "@/lib/server/graph-store";
 
 // OpA: 10km 100円、20km 150円、30km 300円、以降 1km 10円
@@ -79,6 +79,26 @@ describe("findMeetingCandidates", () => {
     const r = findMeetingCandidates(g, "A", "B", "D");
     expect(r.km.some((c) => c.groupId === "E")).toBe(false);
     expect(r.fare.some((c) => c.groupId === "E")).toBe(false);
+  });
+
+  it("候補が多いときは、どちらの並べ方でも上位 150 件に入るものと目的駅に絞る", () => {
+    // M から 0.01km の枝を 400 本生やし、全部が半分ルールを満たす候補にする
+    const spurs = Array.from({ length: 400 }, (_, i) => `s${i}`);
+    const g = createGraphStore(
+      {
+        nodes: {
+          ...lineGraph.nodes,
+          ...Object.fromEntries(spurs.map((id) => [id, node(id)])),
+        },
+        edges: [...lineGraph.edges, ...spurs.map((id) => rail("M", id, 0.01))],
+      },
+      rules,
+    );
+    const r = findMeetingCandidates(g, "A", "B", "D");
+    for (const list of [r.km, r.fare]) {
+      expect(list.length).toBeLessThanOrEqual(301);
+      expect(list.some((c) => c.isDestination)).toBe(true);
+    }
   });
 
   it("目的駅は isDestination が true、一緒に乗る区間が 0 で必ず入る", () => {
@@ -231,6 +251,27 @@ describe("findMeetingCandidates", () => {
       [0, 0],
       [0, 0],
     ]);
+  });
+
+  it("まっすぐ行く運賃が 1 万円を超える組は TooFarError を投げる（運賃探索が秒単位になるため）", () => {
+    // 1km 100円の一次式で 200km の直通 = 20,000円
+    const far = createGraphStore(
+      {
+        nodes: Object.fromEntries(["A", "D"].map((id) => [id, node(id)])),
+        edges: [rail("A", "D", 200)],
+      },
+      [
+        {
+          id: "linear",
+          operators: [],
+          table: [[1, 100]],
+          beyond: { fromKm: 1, baseFare: 100, ratePerKm: 100 },
+        },
+      ],
+    );
+    expect(() => findMeetingCandidates(far, "A", "A", "D")).toThrow(
+      TooFarError,
+    );
   });
 
   it("目的駅に線路でつながっていなければ UnreachableError を投げる", () => {

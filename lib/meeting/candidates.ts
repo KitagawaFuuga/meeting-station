@@ -1,5 +1,6 @@
 import type { GraphEdge, RailGraph } from "@/lib/graph/types";
 import {
+  TooFarError,
   UnreachableError,
   type Candidate,
   type MeetingResult,
@@ -7,6 +8,7 @@ import {
 import { fareAlongPath } from "@/lib/search/fare-along-path";
 import { buildKmTree, pathEdges, type KmTree } from "@/lib/search/km-tree";
 import { findCheapestPath } from "@/lib/search/reachable";
+import { limitCandidates } from "@/lib/meeting/sort";
 import type { GraphStore } from "@/lib/server/graph-store";
 
 // 遠回りが「直接行く量の半分以内」の駅だけを候補にする（設計書 4章「候補の母集団」）
@@ -14,6 +16,12 @@ const DETOUR_LIMIT = 0.5;
 // 運賃で精査する駅を距離でふるう網目。運賃と距離の比率は事業者ごとに違うので、
 // 距離の上限（半分）より広くとる
 const FARE_PREFILTER_LIMIT = 1.0;
+// 表と地図に出す件数の上限（設計書 5章で作る人に任された値）。どちらの並べ方で見ても
+// 上位この件数に入る候補と目的駅を残すので、最大 2 倍 + 1 件になる
+const RESULT_LIMIT = 150;
+// 運賃探索の予算の上限。fare-map の予算の上限（10,000円）と同じで、
+// それを超える長距離（東京・大阪→博多で 12 秒）は探索が秒単位になるので断る
+const MAX_SEARCH_BUDGET = 10000;
 // 営業キロの足し算で出る 1e-12 程度の誤差で、境界の駅を落とさないための余裕
 const EPS = 1e-9;
 // 運賃の精査に使う経路で、事業者が変わる乗換1回に足す距離（km-tree.ts の operatorChangePenalty）。
@@ -72,6 +80,9 @@ export function findMeetingCandidates(
     const direct = pathEdges(tree, toId) ?? [];
     // 最安運賃はこの経路の運賃以下なので、予算にすれば取りこぼさずに探索を絞れる
     const budget = fareAlongPath(graph, calc, rootId, direct);
+    if (budget > MAX_SEARCH_BUDGET) {
+      throw new TooFarError("遠すぎて合流駅を探せません");
+    }
     const cheapest = toGroup
       ? findCheapestPath(graph, calc, rootId, toGroup, budget)
       : null;
@@ -110,7 +121,8 @@ export function findMeetingCandidates(
   }
 
   const km: Candidate[] = [];
-  const fare: Candidate[] = [];
+  // 料金で精査する候補（値はまだ距離）。距離の網目は半分より広いので km を含む
+  const toRefine: Candidate[] = [];
   for (const { id } of reps.values()) {
     const dA = tA.dist.get(id);
     const dB = tB.dist.get(id);
@@ -118,15 +130,21 @@ export function findMeetingCandidates(
     const n = graph.nodes[id];
     if (dA === undefined || dB === undefined || dD === undefined || !n)
       continue;
+    const kmDetourA = Math.max(0, dA + dD - dAD);
+    const kmDetourB = Math.max(0, dB + dD - dBD);
+    if (
+      kmDetourA > dAD * FARE_PREFILTER_LIMIT + EPS ||
+      kmDetourB > dBD * FARE_PREFILTER_LIMIT + EPS
+    )
+      continue;
     // 二人のどちらかが目的駅を通り過ぎてから着く駅は、合流しても意味がないので外す
+    // （経路をたどるので、安い距離の判定で絞ってから見る）
     if (
       passesGroup(graph, tA, id, toGroup) ||
       passesGroup(graph, tB, id, toGroup)
     )
       continue;
-    const kmDetourA = Math.max(0, dA + dD - dAD);
-    const kmDetourB = Math.max(0, dB + dD - dBD);
-    const base = {
+    const candidate: Candidate = {
       groupId: n.groupId,
       stationId: n.id,
       name: n.name,
@@ -135,33 +153,47 @@ export function findMeetingCandidates(
       line: n.lineName,
       operator: n.operator,
       isDestination: n.groupId === toGroup,
+      detourA: kmDetourA,
+      detourB: kmDetourB,
+      shared: dD,
     };
+    toRefine.push(candidate);
     if (
       kmDetourA <= dAD * DETOUR_LIMIT + EPS &&
       kmDetourB <= dBD * DETOUR_LIMIT + EPS
     ) {
-      km.push({ ...base, detourA: kmDetourA, detourB: kmDetourB, shared: dD });
+      km.push(candidate);
     }
+  }
 
-    if (
-      kmDetourA > dAD * FARE_PREFILTER_LIMIT + EPS ||
-      kmDetourB > dBD * FARE_PREFILTER_LIMIT + EPS
-    )
-      continue;
-    const toDest = reversed(pathEdges(fD, id) ?? []);
-    const detourA = Math.max(0, fareA.via(id, toDest) - fareA.cheapestFare);
-    const detourB = Math.max(0, fareB.via(id, toDest) - fareB.cheapestFare);
+  // 運賃の精査は候補ごとに経路を何本もたどるので、長距離で数千件になると秒単位で
+  // 遅くなる（東京・大阪→博多で 19 秒）。距離で見た上位だけを精査する
+  const fare: Candidate[] = [];
+  for (const c of limitCandidates(toRefine, RESULT_LIMIT)) {
+    const toDest = reversed(pathEdges(fD, c.stationId) ?? []);
+    const detourA = Math.max(
+      0,
+      fareA.via(c.stationId, toDest) - fareA.cheapestFare,
+    );
+    const detourB = Math.max(
+      0,
+      fareB.via(c.stationId, toDest) - fareB.cheapestFare,
+    );
     if (
       detourA > fareA.cheapestFare * DETOUR_LIMIT ||
       detourB > fareB.cheapestFare * DETOUR_LIMIT
     )
       continue;
     fare.push({
-      ...base,
+      ...c,
       detourA,
       detourB,
-      shared: fareAlongPath(graph, calc, id, toDest),
+      shared: fareAlongPath(graph, calc, c.stationId, toDest),
     });
   }
-  return { fare, km, cheapest: { a: fareA.path, b: fareB.path } };
+  return {
+    fare: limitCandidates(fare, RESULT_LIMIT),
+    km: limitCandidates(km, RESULT_LIMIT),
+    cheapest: { a: fareA.path, b: fareB.path },
+  };
 }
