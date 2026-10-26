@@ -1,13 +1,15 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useState } from "react";
-import BudgetInput from "@/components/BudgetInput";
-import Logo from "@/components/Logo";
+import { useCallback, useMemo, useState } from "react";
 import BottomSheet from "@/components/BottomSheet";
-import SearchPanel from "@/components/SearchPanel";
-import StationList from "@/components/StationList";
-import { useReachable, type ReachableStation } from "@/hooks/use-reachable";
+import CandidateTable from "@/components/CandidateTable";
+import Logo from "@/components/Logo";
+import TripInput, { type TripField } from "@/components/TripInput";
+import ViewToggles from "@/components/ViewToggles";
+import { useMeeting } from "@/hooks/use-meeting";
+import { sortCandidates, type SortOrder } from "@/lib/meeting/sort";
+import type { Candidate, Metric } from "@/lib/meeting/types";
 import type { SheetState } from "@/lib/sheet";
 import type { StationSuggestion } from "@/lib/server/api-service";
 
@@ -16,39 +18,62 @@ import type { StationSuggestion } from "@/lib/server/api-service";
 // ssr: false を明示する必要がある。副次的に初期バンドルからも外れる。
 const MapView = dynamic(() => import("@/components/MapView"), { ssr: false });
 
+type Trip = Record<TripField, StationSuggestion | null>;
+
 export default function Home() {
-  // 出発駅は駅名の入力（SearchPanel）だけで決める。地図のクリックや現在地からは決めない
-  const [from, setFrom] = useState<StationSuggestion | null>(null);
-  const [budget, setBudget] = useState(500);
-  const [focus, setFocus] = useState<ReachableStation | null>(null);
+  // 3駅は駅名の入力（TripInput）だけで決める。地図のクリックや現在地からは決めない
+  const [trip, setTrip] = useState<Trip>({ a: null, b: null, to: null });
+  const [metric, setMetric] = useState<Metric>("fare");
+  const [order, setOrder] = useState<SortOrder>("detour");
+  const [selected, setSelected] = useState<Candidate | null>(null);
   const [sheet, setSheet] = useState<SheetState>("half");
-  const { data, loading, error, search } = useReachable();
+  const { data, loading, error, search } = useMeeting();
+
+  const candidates = useMemo(
+    () => (data ? sortCandidates(data[metric], order) : []),
+    [data, metric, order],
+  );
 
   const runSearch = useCallback(async () => {
-    // ボタンの disabled とは別の二重の防御。この行のおかげで以降 from は非 null 扱いになる
-    if (!from) return;
-    const ok = await search(from.id, budget);
-    // 成功時だけ畳んで地図を主役にする。失敗時に畳むと、パネル内のエラー表示が
-    // スマホで隠れて「何も起きなかった」ように見える。
-    if (ok) setSheet("collapsed");
-  }, [from, budget, search]);
+    // ボタンの disabled とは別の二重の防御。この行のおかげで以降は非 null 扱いになる
+    if (!trip.a || !trip.b || !trip.to) return;
+    setSelected(null);
+    await search(trip.a.id, trip.b.id, trip.to.id);
+  }, [trip, search]);
 
   // 同じ操作パネルを、デスクトップでは左サイドバー、モバイルではボトムシートに
   // 差し込む。JSX を変数に持つことで2箇所に同じマークアップを書かずに済む。
   const panel = (
     <div className="space-y-4">
-      <SearchPanel selected={from} onSelect={setFrom} />
-      <BudgetInput value={budget} onChange={setBudget} />
+      <TripInput
+        a={trip.a}
+        b={trip.b}
+        to={trip.to}
+        onChange={(which, s) => setTrip((t) => ({ ...t, [which]: s }))}
+      />
       <button
         type="button"
-        disabled={!from || loading}
+        disabled={!trip.a || !trip.b || !trip.to || loading}
         onClick={runSearch}
         className="w-full rounded bg-[#a54700] py-2 font-medium text-white disabled:opacity-40"
       >
         {loading ? "検索中…" : "検索"}
       </button>
       {error && <p className="text-sm text-red-600">{error}</p>}
-      <StationList stations={data?.stations ?? []} onPick={setFocus} />
+      {data && (
+        <ViewToggles
+          metric={metric}
+          order={order}
+          onMetric={setMetric}
+          onOrder={setOrder}
+        />
+      )}
+      <CandidateTable
+        candidates={candidates}
+        metric={metric}
+        selectedGroupId={selected?.groupId ?? null}
+        onPick={setSelected}
+      />
       {/* CC BY 4.0 のデータ（運行本数データ・公共交通オープンデータセンター）は
           表示が条件なので、出典から外さないこと。改変の有無（加工して使用）と、
           運行本数データの ODbL の表示も条件。詳細は README の出典節 */}
@@ -64,22 +89,15 @@ export default function Home() {
 
   return (
     <main className="flex h-dvh">
-      <aside className="hidden w-96 shrink-0 overflow-y-auto border-r border-gray-200 p-4 md:block">
+      <aside className="hidden w-[28rem] shrink-0 overflow-y-auto border-r border-gray-200 p-4 md:block">
         <h1 className="mb-4 flex items-center gap-2 text-lg font-bold">
           <Logo className="h-7 w-7" />
-          fare-map
+          合流駅さがし
         </h1>
         {panel}
       </aside>
       <div className="relative flex-1">
-        <MapView
-          stations={data?.stations ?? []}
-          origin={from}
-          focus={focus}
-          // 徒歩の印の差し替えでは meta は同じオブジェクトのまま（use-reachable の
-          // loadWalkMarks）なので、新しい検索結果のときだけ変わる
-          resultKey={data?.meta}
-        />
+        <MapView stations={[]} origin={null} focus={null} resultKey={null} />
       </div>
       <BottomSheet state={sheet} onStateChange={setSheet}>
         {panel}

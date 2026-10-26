@@ -4,12 +4,21 @@ import { useEffect, useRef, useState } from "react";
 import type { StationSuggestion } from "@/lib/server/api-service";
 
 export interface SearchPanelProps {
+  // 入力欄の名前（aria-label）。見出しは置かず、文の形で何を入れるかを伝える
+  label: string;
+  // 入力欄のあとに続く助詞（「と」「から」「へ」）
+  suffix: string;
   selected: { id: string; name: string } | null;
-  // 候補をそのまま渡す（座標も含むので、選んだ時点で出発駅を地図に描ける）
+  // 候補をそのまま渡す（座標も含むので、選んだ時点で駅を地図に描ける）
   onSelect(station: StationSuggestion): void;
 }
 
-export default function SearchPanel({ selected, onSelect }: SearchPanelProps) {
+export default function SearchPanel({
+  label,
+  suffix,
+  selected,
+  onSelect,
+}: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [suggestions, setSuggestions] = useState<StationSuggestion[]>([]);
   const [open, setOpen] = useState(false);
@@ -70,11 +79,11 @@ export default function SearchPanel({ selected, onSelect }: SearchPanelProps) {
 
   return (
     <div className="relative">
-      {/* 「〇〇から □□円で行ける駅」の文の前半。入力欄と助詞を1行に並べる */}
+      {/* 「〇〇 と △△ から □□ へ」の文の一部。入力欄と助詞を1行に並べる */}
       <div className="flex items-baseline gap-2">
         <input
           type="text"
-          aria-label="出発駅"
+          aria-label={label}
           value={query}
           placeholder={selected?.name ?? "駅名を入力"}
           onChange={(e) => setQuery(e.target.value)}
@@ -90,7 +99,7 @@ export default function SearchPanel({ selected, onSelect }: SearchPanelProps) {
           }}
           className="mt-1 min-w-0 flex-1 rounded border border-gray-300 px-3 py-2 text-lg font-bold placeholder:font-normal"
         />
-        <span className="text-lg">から</span>
+        <span className="w-8 text-lg">{suffix}</span>
       </div>
       {open && suggestions.length > 0 && (
         <ul
