@@ -118,4 +118,58 @@ describe("fareAlongPath", () => {
     const graph: RailGraph = { nodes: { A: node("A") }, edges: [] };
     expect(fareAlongPath(graph, calc, "A", [])).toBe(0);
   });
+
+  it("区間の終わりで名前の違う駅へ歩いて乗り換えても、降りた駅の名前で駅ペアの特定運賃が当たる", () => {
+    // OpA の X→Y（20km、表なら 150円）に特定運賃 90円。Y から名前の違う Z へ歩いて乗り換え、
+    // OpB で W まで。実例: JR 高槻→大阪（特定運賃 290円）で降りて地下鉄の梅田へ歩く。
+    // 区間の終点を乗換先の「梅田」として引くと特定運賃が当たらず 420円になっていた
+    const withOverride = createFareCalculator(
+      [
+        {
+          id: "test",
+          operators: [],
+          table: [
+            [10, 100],
+            [20, 150],
+            [30, 300],
+          ],
+          beyond: { fromKm: 30, baseFare: 300, ratePerKm: 10 },
+        },
+      ],
+      [
+        {
+          operator: "OpA",
+          pairs: [{ from: "X", to: "Y", fare: 90 }],
+          source: { url: "https://example.test", fetchedAt: "", note: "" },
+        },
+      ],
+    );
+    const edges = [
+      rail("X", "Y", 20),
+      {
+        from: "Y",
+        to: "Z",
+        km: 0,
+        kind: "transfer",
+        operator: "",
+      } as GraphEdge,
+      rail("Z", "W", 5, "OpB"),
+    ];
+    const graph: RailGraph = {
+      nodes: {
+        X: node("X"),
+        Y: node("Y"),
+        Z: node("Z", "OpB"),
+        W: node("W", "OpB"),
+      },
+      edges,
+    };
+    // 特定運賃 90円 + OpB 5km 100円
+    expect(fareAlongPath(graph, withOverride, "X", edges)).toBe(190);
+    // 探索でも、行きと帰りで同じ額になる
+    const fareTo = (from: string, to: string) =>
+      findReachable(graph, withOverride, from, 1000).find((r) => r.id === to)
+        ?.fare;
+    expect([fareTo("X", "W"), fareTo("W", "X")]).toEqual([190, 190]);
+  });
 });

@@ -177,6 +177,18 @@ function runSearch(
   // 読み替えるので、同じ距離でも区域外の起点とは将来の運賃が違う。区域内の起点どうしは
   // 区域でまとめる（発駅〜中心駅の違いが効くのは遠回りの経路だけ。近似の範囲は
   // docs/search-design.md「特定都区市内」）。区切りの "|" は駅名・区間 id に現れない。
+  // 名前の違う駅へ歩いて乗り換えた直後は、区間の運賃を「降りた駅」（segmentEndId）で引く。
+  // 同じ駅に直接乗って着いた状態とは、この先の運賃（駅ペアの特定運賃が当たるか）が違うので、
+  // 降りた駅の名前で bucket を分ける。分けないと、距離の短い「歩いて着いた」状態が
+  // 特定運賃の当たる状態を支配して追い出す（A→T 特定運賃100円が A→S＋徒歩の200円に負けた）
+  const walkedKey = (s: {
+    stationId: string;
+    segmentEndId: string;
+  }): string => {
+    const end = nameOf(s.segmentEndId);
+    return end === nameOf(s.stationId) ? "" : `|walked:${end ?? ""}`;
+  };
+
   const originBucketKey = (
     segmentOperator: string,
     segmentFromId: string,
@@ -275,7 +287,7 @@ function runSearch(
           next.fareFromId,
           next.isHonshuThrough,
           next.confirmedFare,
-        ),
+        ) + walkedKey(next),
         flagsKey(next.isHonshuThrough, next.segmentAllLocal),
       );
       const nextEntry: ParetoEntry = {

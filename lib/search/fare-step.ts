@@ -25,6 +25,10 @@ export interface FareState {
   // （通し運賃の地方交通線の扱いは未対応。換算キロで幹線の表を引く近似のまま）
   segmentAllLocal: boolean;
   segmentLocalKm: number; // 進行中区間の営業キロ。segmentAllLocal の間だけ意味を持つ
+  // 進行中区間で最後に着いた駅（その事業者を降りる駅）。乗換の辺では動かさない。
+  // stationId は乗換で移った先になるので、名前の違う駅へ歩く乗換（大阪→梅田）の後に
+  // stationId の名前で区間を引くと、駅ペアの特定運賃（大阪〜高槻 290円）が当たらない
+  segmentEndId: string;
   fare: number; // confirmedFare + 進行中区間の運賃。状態生成時に確定する
 }
 
@@ -127,6 +131,7 @@ export function initialFareState(fromId: string): FareState {
     honshuThroughEastKm: 0,
     segmentAllLocal: false,
     segmentLocalKm: 0,
+    segmentEndId: fromId,
     fare: 0,
   };
 }
@@ -138,8 +143,7 @@ export function advanceFareState(
 ): FareState {
   const { calc, nameOf } = ctx;
   if (edge.kind === "transfer") {
-    // stationId だけ差し替えて fare を引き継ぐと、override 判定に使う「現在駅名」
-    // が乗り換え前のままになる。必ず再計算する。
+    // 乗換では区間の終点（segmentEndId）を動かさない。運賃はその事業者を降りた駅までで引く
     return {
       ...state,
       stationId: edge.to,
@@ -153,7 +157,7 @@ export function advanceFareState(
           state.honshuThroughKm,
           state.honshuThroughEastKm,
           nameOf(state.segmentFromId),
-          nameOf(edge.to),
+          nameOf(state.segmentEndId),
           localKmOf(state),
           nameOf(state.fareFromId),
         ),
@@ -169,6 +173,7 @@ export function advanceFareState(
       segmentKm,
       segmentAllLocal,
       segmentLocalKm,
+      segmentEndId: edge.to,
       fare:
         state.confirmedFare +
         evaluateSegmentFare(
@@ -209,6 +214,7 @@ export function advanceFareState(
       honshuThroughEastKm,
       segmentAllLocal: false,
       segmentLocalKm: 0,
+      segmentEndId: edge.to,
       fare:
         state.confirmedFare +
         calc.estimateHonshuThrough(
@@ -231,7 +237,7 @@ export function advanceFareState(
       state.honshuThroughKm,
       state.honshuThroughEastKm,
       nameOf(state.segmentFromId),
-      nameOf(state.stationId),
+      nameOf(state.segmentEndId),
       localKmOf(state),
       nameOf(state.fareFromId),
     );
@@ -247,6 +253,7 @@ export function advanceFareState(
     honshuThroughEastKm: 0,
     segmentAllLocal: edge.localKm !== undefined,
     segmentLocalKm: edge.localKm ?? 0,
+    segmentEndId: edge.to,
     fare:
       confirmedFare +
       calc.estimate(
