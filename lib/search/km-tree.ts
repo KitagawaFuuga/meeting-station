@@ -1,3 +1,4 @@
+import { HONSHU_OPERATORS } from "@/lib/fare/calculator";
 import type { GraphEdge, RailGraph } from "@/lib/graph/types";
 import { MinHeap } from "@/lib/search/heap";
 
@@ -24,11 +25,14 @@ export function buildKmTree(
   options: KmTreeOptions = {},
 ): KmTree {
   const penalty = options.operatorChangePenalty ?? 0;
+  // JR本州3社の会社の境目（熱海・国府津など）は運賃が通しで続き、初乗りがかからないので罰則なし
+  const changesFare = (e: GraphEdge): boolean => {
+    const a = graph.nodes[e.from]?.operator ?? "";
+    const b = graph.nodes[e.to]?.operator ?? "";
+    return a !== b && !(HONSHU_OPERATORS.has(a) && HONSHU_OPERATORS.has(b));
+  };
   const costOf = (e: GraphEdge): number =>
-    e.kind === "transfer" &&
-    graph.nodes[e.from]?.operator !== graph.nodes[e.to]?.operator
-      ? e.km + penalty
-      : e.km;
+    e.kind === "transfer" && changesFare(e) ? e.km + penalty : e.km;
 
   // グラフの辺は片方向だけ格納されているので、両方向に展開する
   const adjacency = new Map<string, { e: GraphEdge; cost: number }[]>();

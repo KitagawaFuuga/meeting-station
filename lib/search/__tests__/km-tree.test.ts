@@ -77,6 +77,31 @@ describe("buildKmTree", () => {
     expect(path?.map((e) => e.to)).toEqual(["B", "C"]);
   });
 
+  it("JR本州3社の会社の境目の乗換には罰則をかけない（運賃は通しで続くため）", () => {
+    // A -JR東日本 10km- B =乗換= B2 -JR東海 10km- C（計 20km）と、
+    // A -JR東日本 23km- C の直通。熱海・国府津のような会社の境目は運賃が切れないので、短い前者をたどる
+    const jr = (id: string, operator: string) => ({ ...node(id), operator });
+    const g: RailGraph = {
+      nodes: {
+        A: jr("A", "JR東日本"),
+        B: jr("B", "JR東日本"),
+        B2: jr("B2", "JR東海"),
+        C: jr("C", "JR東海"),
+      },
+      edges: [
+        { from: "A", to: "B", km: 10, kind: "rail", operator: "JR東日本" },
+        { from: "B", to: "B2", km: 0, kind: "transfer", operator: "" },
+        { from: "B2", to: "C", km: 10, kind: "rail", operator: "JR東海" },
+        { from: "A", to: "C", km: 23, kind: "rail", operator: "JR東日本" },
+      ],
+    };
+    const path = pathEdges(
+      buildKmTree(g, "A", { operatorChangePenalty: 5 }),
+      "C",
+    );
+    expect(path?.map((e) => e.to)).toEqual(["B", "B2", "C"]);
+  });
+
   it("つながっていない駅は dist に入らない", () => {
     const g = graphOf(["A", "B", "X"], [rail("A", "B", 1)]);
     expect(buildKmTree(g, "A").dist.has("X")).toBe(false);
