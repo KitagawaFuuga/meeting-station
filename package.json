@@ -1,0 +1,61 @@
+{
+  "name": "meeting-station",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "node scripts/copy-maplibre-worker.mjs && next dev",
+    "build": "node scripts/copy-maplibre-worker.mjs && next build",
+    "start": "next start",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "pipeline:fetch": "tsx scripts/pipeline/fetch-data.ts && tsx scripts/pipeline/fetch-kilometrage.ts",
+    "pipeline:fetch-km": "tsx scripts/pipeline/fetch-kilometrage.ts",
+    "pipeline:build": "tsx scripts/pipeline/build-graph.ts",
+    "pipeline:validate": "tsx scripts/pipeline/validate-graph.ts",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "",
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "fuse.js": "^7.5.0",
+    "maplibre-gl": "^6.16.0",
+    "next": "^16.4.3",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.6.0",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@nizos/probity": "^1.10.1",
+    "@playwright/test": "^1.64.1",
+    "@tailwindcss/postcss": "^4.3.3",
+    "@types/geojson": "^7946.0.16",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "postcss": "^8.5.31",
+    "prettier": "^3.9.10",
+    "sharp": "^0.35.5",
+    "tailwindcss": "^4.3.3",
+    "tsx": "^4.23.12",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-eslint": "^8.72.0",
+    "vitest": "^5.0.5"
+  }
+}

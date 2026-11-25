@@ -3,3 +3,16 @@ node_modules/
 out/
 .superpowers/
 .env*
+data/raw/
+*.tsbuildinfo
+!.env.example
+
+# scripts/copy-maplibre-worker.mjs が npm install / dev / build 前に生成する
+public/maplibre-gl-worker.mjs
+public/maplibre-gl-shared.mjs
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/.playwright/
