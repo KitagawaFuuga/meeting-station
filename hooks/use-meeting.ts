@@ -51,6 +51,8 @@ export function useMeeting(): UseMeeting {
       return true;
     } catch (e) {
       if (isStale()) return false;
+      // 前の検索の結果を残すと、入れ直した駅とは別の組の表と地図がエラーと並んで見える
+      setData(null);
       setError(e instanceof Error ? e.message : "検索に失敗しました");
       return false;
     } finally {
