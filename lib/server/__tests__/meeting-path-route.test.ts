@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { NextRequest } from "next/server";
+import { RATE_LIMIT_CAPACITY } from "@/app/api/meeting/config";
 import { GET } from "@/app/api/meeting/path/route";
+import { GET as listGET } from "@/app/api/meeting/route";
 
 // 実データ(data/graph.json)を読む
 const OMIYA = "1131906";
@@ -17,6 +19,26 @@ const call = (query: string) =>
   );
 
 describe("GET /api/meeting/path", () => {
+  it("候補一覧の API の回数制限を使い切っても、経路の API は使える（別々に数える）", async () => {
+    // 行を次々に選ぶと経路の API を何度も呼ぶ。同じ制限で数えると、経路の表示が
+    // 黙って止まり、次の検索まで 429 になっていた
+    const ip = "203.0.113.88";
+    const listCall = () =>
+      listGET(
+        new NextRequest("http://localhost/api/meeting?a=x", {
+          headers: { "x-forwarded-for": ip },
+        }),
+      );
+    for (let i = 0; i < RATE_LIMIT_CAPACITY; i++) await listCall();
+    expect((await listCall()).status).toBe(429);
+    const res = await GET(
+      new NextRequest("http://localhost/api/meeting/path?a=x", {
+        headers: { "x-forwarded-for": ip },
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("metric が fare・km 以外なら 400 を返す", async () => {
     const res = await call(
       `a=${OMIYA}&b=${TACHIKAWA}&to=${YOKOHAMA}&via=${SHINJUKU_JR}&metric=time`,

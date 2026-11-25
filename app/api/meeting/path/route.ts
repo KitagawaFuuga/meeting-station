@@ -7,7 +7,7 @@ import { meetingService, rateLimited } from "../service";
 
 // 表で選ばれた候補の経路。候補一覧に全候補の経路を入れると応答が重くなるので分ける
 export function GET(req: NextRequest) {
-  const limited = rateLimited(req);
+  const limited = rateLimited(req, "path");
   if (limited) return limited;
 
   const sp = req.nextUrl.searchParams;

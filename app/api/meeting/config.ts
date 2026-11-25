@@ -17,5 +17,12 @@ export const RATE_LIMIT_REFILL_PER_SEC = 0.5;
 /** 429 で返す Retry-After（秒）。1 トークン回復するまでの時間。 */
 export const RETRY_AFTER_SEC = Math.ceil(1 / RATE_LIMIT_REFILL_PER_SEC);
 
+/**
+ * 経路の API（path/route.ts）の制限。表の行を選ぶたび・物差しを切り替えるたびに呼ぶので
+ * 候補一覧より回数が多い。ふつうはキャッシュに当たって軽いので、別に広めに数える
+ */
+export const PATH_RATE_LIMIT_CAPACITY = envInt("PATH_RATE_LIMIT_CAPACITY", 60);
+export const PATH_RATE_LIMIT_REFILL_PER_SEC = 2;
+
 /** 同じ3駅の組の結果を使い回す件数。経路の API もこの結果を使う */
 export const MEETING_CACHE_ENTRIES = envInt("MEETING_CACHE_ENTRIES", 200);

@@ -10,7 +10,7 @@ import {
 import { meetingService, rateLimited } from "./service";
 
 export function GET(req: NextRequest) {
-  const limited = rateLimited(req);
+  const limited = rateLimited(req, "list");
   if (limited) return limited;
 
   const sp = req.nextUrl.searchParams;
