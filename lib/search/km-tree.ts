@@ -19,32 +19,48 @@ export interface KmTreeOptions {
   operatorChangePenalty?: number;
 }
 
-export function buildKmTree(
-  graph: RailGraph,
-  rootId: string,
-  options: KmTreeOptions = {},
-): KmTree {
-  const penalty = options.operatorChangePenalty ?? 0;
-  // JR本州3社の会社の境目（熱海・国府津など）は運賃が通しで続き、初乗りがかからないので罰則なし
+interface Adjacent {
+  e: GraphEdge;
+  // 事業者が変わる乗換か（罰則の対象）。JR本州3社の会社の境目（熱海・国府津など）は
+  // 運賃が通しで続き初乗りがかからないので対象外
+  changesFare: boolean;
+}
+
+// グラフの辺は片方向だけ格納されているので、両方向に展開した隣接リストを作る。
+// 1回の問い合わせで木を6本作るので、グラフごとに1度だけ作って使い回す
+// （WeakMap なので、グラフが破棄されれば一緒に回収される）
+const adjacencyCache = new WeakMap<RailGraph, Map<string, Adjacent[]>>();
+
+function adjacencyOf(graph: RailGraph): Map<string, Adjacent[]> {
+  const cached = adjacencyCache.get(graph);
+  if (cached) return cached;
   const changesFare = (e: GraphEdge): boolean => {
+    if (e.kind !== "transfer") return false;
     const a = graph.nodes[e.from]?.operator ?? "";
     const b = graph.nodes[e.to]?.operator ?? "";
     return a !== b && !(HONSHU_OPERATORS.has(a) && HONSHU_OPERATORS.has(b));
   };
-  const costOf = (e: GraphEdge): number =>
-    e.kind === "transfer" && changesFare(e) ? e.km + penalty : e.km;
-
-  // グラフの辺は片方向だけ格納されているので、両方向に展開する
-  const adjacency = new Map<string, { e: GraphEdge; cost: number }[]>();
+  const adjacency = new Map<string, Adjacent[]>();
   const add = (e: GraphEdge) => {
     const arr = adjacency.get(e.from) ?? [];
-    arr.push({ e, cost: costOf(e) });
+    arr.push({ e, changesFare: changesFare(e) });
     adjacency.set(e.from, arr);
   };
   for (const e of graph.edges) {
     add(e);
     add({ ...e, from: e.to, to: e.from });
   }
+  adjacencyCache.set(graph, adjacency);
+  return adjacency;
+}
+
+export function buildKmTree(
+  graph: RailGraph,
+  rootId: string,
+  options: KmTreeOptions = {},
+): KmTree {
+  const penalty = options.operatorChangePenalty ?? 0;
+  const adjacency = adjacencyOf(graph);
 
   const dist = new Map<string, number>([[rootId, 0]]);
   const prev = new Map<string, GraphEdge>();
@@ -54,8 +70,8 @@ export function buildKmTree(
     const cur = heap.pop();
     if (cur === undefined) break;
     if (cur.d > (dist.get(cur.id) ?? Infinity)) continue;
-    for (const { e, cost } of adjacency.get(cur.id) ?? []) {
-      const d = cur.d + cost;
+    for (const { e, changesFare } of adjacency.get(cur.id) ?? []) {
+      const d = cur.d + e.km + (changesFare ? penalty : 0);
       if (d < (dist.get(e.to) ?? Infinity)) {
         dist.set(e.to, d);
         prev.set(e.to, e);
