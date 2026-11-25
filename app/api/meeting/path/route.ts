@@ -27,8 +27,13 @@ export function GET(req: NextRequest) {
     return NextResponse.json({ error: "未知の駅 id" }, { status: 404 });
   }
   try {
-    // 料金の経路は候補の計算で求めた最安経路を使う。候補一覧の直後に呼ばれるのでキャッシュに当たる
-    const { cheapest } = meetingService.candidates(store, q);
+    // 料金の経路は候補の計算で求めた最安経路を使う。候補一覧の直後に呼ばれるのでキャッシュに
+    // 当たる。距離の経路は最安経路を使わないので、キャッシュが外れたときに候補の計算
+    // （運賃探索2回）を走らせない
+    const cheapest =
+      q.metric === "fare"
+        ? meetingService.candidates(store, q).cheapest
+        : undefined;
     return NextResponse.json(meetingPath(store, q, cheapest));
   } catch (e) {
     if (e instanceof TooFarError) {
