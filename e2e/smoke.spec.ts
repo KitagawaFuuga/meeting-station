@@ -32,7 +32,10 @@ const sidebar = (page: Page) => page.locator("aside");
 async function pickStation(page: Page, label: string, name: string) {
   const panel = sidebar(page);
   await panel.getByLabel(label).fill(name);
+  // 候補の一覧（ul）の中から選ぶ。比較表にも同じ駅名のボタンがあるので、
+  // 一覧に絞らないと表の行を押してしまう（川崎は大宮・立川→横浜の候補にもある）
   const suggestion = panel
+    .locator("ul")
     .getByRole("button", { name: new RegExp(`^${name}`) })
     .first();
   await expect(suggestion).toBeVisible({ timeout: 15_000 });
@@ -200,6 +203,49 @@ test("検索すると、地図の色の意味を示す凡例が表の上に出�
   await expect(legend).toContainText("Aさんだけ遠回り");
   await expect(legend).toContainText("Bさんだけ遠回り");
   await expect(legend).toContainText("二人とも遠回り");
+});
+
+test("検索に失敗したら、前の検索の比較表を消してエラーだけを出す", async ({
+  page,
+}) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const table = sidebar(page).getByRole("table");
+  await expect(table).toBeVisible({ timeout: 30_000 });
+  // 目的駅を博多に変えると、運賃が1万円を超えて 422 で断られる
+  await pickStation(page, "目的駅", "博多");
+  await sidebar(page).getByRole("button", { name: "検索" }).click();
+  await expect(
+    sidebar(page).getByText("遠すぎて合流駅を探せません"),
+  ).toBeVisible({
+    timeout: 30_000,
+  });
+  await expect(table).toHaveCount(0);
+});
+
+test("検索中に前の表の行を選んでも、新しい結果が出たらその選択は外れる", async ({
+  page,
+}) => {
+  await searchOmiyaTachikawaYokohama(page);
+  const rows = sidebar(page).getByRole("table").locator("tbody tr");
+  await expect(rows.first()).toBeVisible({ timeout: 30_000 });
+  // 新しい検索の応答を、前の表の行を押し終えるまで止めておく
+  let release!: () => void;
+  const clicked = new Promise<void>((r) => (release = r));
+  await page.route("**/api/meeting?*", async (route) => {
+    await clicked;
+    await route.continue();
+  });
+  await pickStation(page, "目的駅", "川崎");
+  await sidebar(page).getByRole("button", { name: "検索" }).click();
+  await rows.first().getByRole("button").click();
+  await expect(rows.first()).toHaveAttribute("aria-selected", "true");
+  release();
+  await expect(rows.last()).toContainText("現地集合（川崎）", {
+    timeout: 30_000,
+  });
+  await expect(
+    sidebar(page).locator('tbody tr[aria-selected="true"]'),
+  ).toHaveCount(0);
 });
 
 test("経路を表示中に物差しを切り替えると、metric を変えて経路を取り直す", async ({

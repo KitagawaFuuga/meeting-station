@@ -26,9 +26,29 @@ export default function Home() {
   const [trip, setTrip] = useState<Trip>({ a: null, b: null, to: null });
   const [metric, setMetric] = useState<Metric>("fare");
   const [order, setOrder] = useState<SortOrder>("detour");
-  const [selected, setSelected] = useState<Candidate | null>(null);
+  // 選んだ駅は、どの検索結果の表で選んだかと組で持つ
+  const [picked, setPicked] = useState<{
+    meta: unknown;
+    candidate: Candidate;
+  } | null>(null);
   const [sheet, setSheet] = useState<SheetState>("half");
   const { data, loading, error, search } = useMeeting();
+
+  const candidates = useMemo(
+    () => (data ? sortCandidates(data[metric], order) : []),
+    [data, metric, order],
+  );
+
+  // 選んだ駅が今の表に無ければ選んでいない扱いにする。検索中に前の表の行を押したまま
+  // 新しい結果が届いたときや、物差しを切り替えて一覧から消えたときに、別の組の経路を
+  // 取りに行ったり、表に無い駅の印を残したりしないため
+  const selected =
+    picked !== null &&
+    picked.meta === data?.meta &&
+    candidates.some((c) => c.groupId === picked.candidate.groupId)
+      ? picked.candidate
+      : null;
+
   // 物差しを切り替えたら、選んだ駅の経路もその物差しで取り直す
   const legs = useMeetingPath(
     data?.meta ?? null,
@@ -36,15 +56,10 @@ export default function Home() {
     metric,
   );
 
-  const candidates = useMemo(
-    () => (data ? sortCandidates(data[metric], order) : []),
-    [data, metric, order],
-  );
-
   const runSearch = useCallback(async () => {
     // ボタンの disabled とは別の二重の防御。この行のおかげで以降は非 null 扱いになる
     if (!trip.a || !trip.b || !trip.to) return;
-    setSelected(null);
+    setPicked(null);
     await search(trip.a.id, trip.b.id, trip.to.id);
   }, [trip, search]);
 
@@ -80,7 +95,7 @@ export default function Home() {
         metric={metric}
         selectedGroupId={selected?.groupId ?? null}
         onPick={(c) => {
-          setSelected(c);
+          setPicked({ meta: data?.meta, candidate: c });
           // スマホでは選んだ合流駅の経路を見せるため、シートを畳んで地図を主役にする
           setSheet("collapsed");
         }}
