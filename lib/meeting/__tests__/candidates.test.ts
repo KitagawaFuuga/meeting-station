@@ -81,6 +81,43 @@ describe("findMeetingCandidates", () => {
     expect(r.fare.some((c) => c.groupId === "E")).toBe(false);
   });
 
+  it("運賃で精査する候補を、遠回りが半分を超えて結局外れる駅で埋めない", () => {
+    // A -50- P -50- D の本線（1km 10円の一次式なので、運賃の半分ルールは距離の半分ルールと同じ）。
+    // A の背後に 160 駅（A から 26〜45km。遠回りは 52〜90km で、半分＝50km を超える）。
+    // 一緒に乗る区間は 126〜145km と長いので、ふるいの網目（遠回り 100% まで）の中で
+    // 「長く一緒に乗れる順」の上位を占める。P から枝の 200 駅（枝の長さ 1〜24km、遠回り 2〜48km で
+    // 半分以内）のうち、遠回りが大きい枝先は精査の枠から漏れて、料金の候補に出てこなかった
+    const behind = Array.from({ length: 160 }, (_, i) => `z${i}`);
+    const spurs = Array.from({ length: 200 }, (_, i) => `p${i}`);
+    const linear: FareRule[] = [
+      {
+        id: "linear",
+        operators: [],
+        table: [[1, 10]],
+        beyond: { fromKm: 1, baseFare: 10, ratePerKm: 10 },
+      },
+    ];
+    const g = createGraphStore(
+      {
+        nodes: Object.fromEntries(
+          ["A", "P", "D", ...behind, ...spurs].map((id) => [id, node(id)]),
+        ),
+        edges: [
+          rail("A", "P", 50),
+          rail("P", "D", 50),
+          ...behind.map((id, i) => rail("A", id, 26 + (i * 19) / 159)),
+          ...spurs.map((id, i) => rail("P", id, 1 + (i * 23) / 199)),
+        ],
+      },
+      linear,
+    );
+    const farthestSpur = findMeetingCandidates(g, "A", "A", "D").fare.find(
+      (c) => c.groupId === "p199",
+    );
+    // 枝の長さ 24km、遠回り 48km（半分以内）
+    expect(farthestSpur).toBeDefined();
+  });
+
   it("候補が多いときは、どちらの並べ方でも上位 150 件に入るものと目的駅に絞る", () => {
     // M から 0.01km の枝を 400 本生やし、全部が半分ルールを満たす候補にする
     const spurs = Array.from({ length: 400 }, (_, i) => `s${i}`);

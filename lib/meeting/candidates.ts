@@ -8,7 +8,7 @@ import {
 import { fareAlongPath } from "@/lib/search/fare-along-path";
 import { buildKmTree, pathEdges, type KmTree } from "@/lib/search/km-tree";
 import { findCheapestPath } from "@/lib/search/reachable";
-import { limitCandidates } from "@/lib/meeting/sort";
+import { limitCandidates, sortCandidates } from "@/lib/meeting/sort";
 import type { GraphStore } from "@/lib/server/graph-store";
 
 // 遠回りが「直接行く量の半分以内」の駅だけを候補にする（設計書 4章「候補の母集団」）
@@ -90,7 +90,8 @@ export function findMeetingCandidates(
       (cheapest?.nodeIds ?? []).map((id) => graph.nodes[id]?.groupId),
     );
     const cheapestFare = cheapest?.fare ?? budget;
-    const via = (mId: string, toDest: GraphEdge[]): number => {
+    // fromM は合流駅から目的駅までの運賃（候補ごとに1度だけ計算して渡す）
+    const via = (mId: string, toDest: GraphEdge[], fromM: number): number => {
       if (onCheapest.has(graph.nodes[mId]?.groupId)) return cheapestFare;
       const toM = pathEdges(tree, mId) ?? [];
       // 駅ペアの特定運賃は発着の駅だけで当たり、どの経路を通ったかを見ない。
@@ -99,7 +100,7 @@ export function findMeetingCandidates(
       return Math.max(
         fareAlongPath(graph, calc, rootId, [...toM, ...toDest]),
         fareAlongPath(graph, calc, rootId, toM),
-        fareAlongPath(graph, calc, mId, toDest),
+        fromM,
       );
     };
     // 探索が予算内に着けなかったとき（通常は起きない）は、予算にした経路を最安とみなす
@@ -167,29 +168,34 @@ export function findMeetingCandidates(
   }
 
   // 運賃の精査は候補ごとに経路を何本もたどるので、長距離で数千件になると秒単位で
-  // 遅くなる（東京・大阪→博多で 19 秒）。距離で見た上位だけを精査する
+  // 遅くなる（東京・大阪→博多で 19 秒）。距離で見た上位だけを精査する。
+  // 「遠回りが少ない順」の上位は網目の広い toRefine から取る（距離では半分を超えても
+  // 運賃では半分以内の駅を拾うため）。「長く一緒に乗れる順」の上位は距離の半分以内（km）から
+  // 取る。toRefine から取ると、片方の背後で遠回りが半分を超える駅（一緒に乗る区間は長い）が
+  // 枠を占め、運賃の半分ルールで結局外れて、半分以内の駅が精査されなかった
+  const refine = new Set<Candidate>([
+    ...sortCandidates(toRefine, "detour").slice(0, RESULT_LIMIT),
+    ...sortCandidates(km, "together").slice(0, RESULT_LIMIT),
+    ...toRefine.filter((c) => c.isDestination),
+  ]);
   const fare: Candidate[] = [];
-  for (const c of limitCandidates(toRefine, RESULT_LIMIT)) {
+  for (const c of refine) {
     const toDest = reversed(pathEdges(fD, c.stationId) ?? []);
+    const shared = fareAlongPath(graph, calc, c.stationId, toDest);
     const detourA = Math.max(
       0,
-      fareA.via(c.stationId, toDest) - fareA.cheapestFare,
+      fareA.via(c.stationId, toDest, shared) - fareA.cheapestFare,
     );
     const detourB = Math.max(
       0,
-      fareB.via(c.stationId, toDest) - fareB.cheapestFare,
+      fareB.via(c.stationId, toDest, shared) - fareB.cheapestFare,
     );
     if (
       detourA > fareA.cheapestFare * DETOUR_LIMIT ||
       detourB > fareB.cheapestFare * DETOUR_LIMIT
     )
       continue;
-    fare.push({
-      ...c,
-      detourA,
-      detourB,
-      shared: fareAlongPath(graph, calc, c.stationId, toDest),
-    });
+    fare.push({ ...c, detourA, detourB, shared });
   }
   return {
     fare: limitCandidates(fare, RESULT_LIMIT),
