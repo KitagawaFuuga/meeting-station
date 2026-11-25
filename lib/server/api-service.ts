@@ -58,11 +58,15 @@ export function suggestStations(
   const { fuse, linesOf } = getIndex(store);
   const bucketOf = (score: number | undefined) =>
     Math.round((score ?? 1) / SCORE_BUCKET);
+  // 駅名が入力とちょうど一致する駅を最初に出す。一致度の幅で丸めると、ちょうど一致と
+  // 入力を含む長い駅名が同じ幅に入り、路線の多い八王子が王子より先に出ていた
+  const exact = (name: string) => (name === query.trim() ? 0 : 1);
   // 件数を絞らずに全件を取ってから並べ替える。先に絞ると、並べ替えの前に大きい駅が落ちる
   const ranked = fuse
     .search(query)
     .sort(
       (a, b) =>
+        exact(a.item.name) - exact(b.item.name) ||
         bucketOf(a.score) - bucketOf(b.score) ||
         (linesOf.get(b.item.groupId) ?? 0) - (linesOf.get(a.item.groupId) ?? 0),
     );

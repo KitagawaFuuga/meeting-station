@@ -75,6 +75,23 @@ describe("suggestStations", () => {
     expect(suggestStations(many, "東")[0]?.name).toBe("東京");
   });
 
+  it("駅名が入力とちょうど一致する駅は、路線の多い長い駅名より先に出す", () => {
+    // 実データで「王子」と打つと、4路線の八王子が1路線の王子より先に出ていた
+    const hachioji = ["L1", "L2", "L3", "L4"].map((line, i) =>
+      node(`H${i}`, "八王子", 35.65, 139.33, "G_HACHIOJI", line),
+    );
+    const g = createGraphStore(
+      {
+        nodes: Object.fromEntries(
+          [...hachioji, node("O", "王子", 35.75, 139.73)].map((n) => [n.id, n]),
+        ),
+        edges: [],
+      },
+      rules,
+    );
+    expect(suggestStations(g, "王子")[0]?.name).toBe("王子");
+  });
+
   it("候補に座標を含める（選んだ時点で駅を地図に描くため）", () => {
     const [shinjuku] = suggestStations(store, "新宿");
     expect(shinjuku).toMatchObject({ lat: 35.69, lng: 139.7 });
